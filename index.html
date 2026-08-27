@@ -963,24 +963,23 @@ textarea{resize:vertical;min-height:56px;}
           </div>
           <div class="search-hint" id="search-hint-lbl">Searches ESPN schedule for selected date.</div>
           <div id="leg-sel-game"></div>
+          <div id="market-wrap"></div>
         </div>
         <!-- PROP -->
         <div id="leg-prop-sec" style="display:none;">
           <div class="frow">
-            <div class="fg" style="margin:0;"><label>Player Name</label><input type="text" id="prop-player" placeholder="e.g. LeBron James"></div>
+            <div class="fg" style="margin:0;position:relative;">
+              <label>Player Name</label>
+              <input type="text" id="prop-player" placeholder="e.g. LeBron James" autocomplete="off"
+                oninput="propPlayerId=null;filterPropRoster(this.value);updatePropAutoPick()" onfocus="filterPropRoster(this.value)">
+              <div class="gresults" id="prop-player-results" style="display:none;"></div>
+            </div>
             <div class="fg" style="margin:0;"><label>Prop Type</label>
-              <select id="prop-type">
-                <option>Points Over/Under</option><option>Assists Over/Under</option>
-                <option>Rebounds Over/Under</option><option>Passing Yards O/U</option>
-                <option>Rushing Yards O/U</option><option>Receiving Yards O/U</option>
-                <option>Strikeouts O/U</option><option>Hits O/U</option>
-                <option>Goals O/U</option><option>Anytime Touchdown</option>
-                <option>First Touchdown</option><option>Custom Prop</option>
-              </select>
+              <select id="prop-type"></select>
             </div>
           </div>
           <div class="frow" style="margin-top:8px;">
-            <div class="fg" style="margin:0;"><label>Line / Value</label><input type="text" id="prop-line" placeholder="e.g. Over 27.5"></div>
+            <div class="fg" style="margin:0;"><label>Line / Value</label><input type="text" id="prop-line" placeholder="e.g. Over 27.5" oninput="updatePropAutoPick()"></div>
             <div class="fg" style="margin:0;"><label>Game Context</label><input type="text" id="prop-ctx" placeholder="e.g. vs. Warriors"></div>
           </div>
         </div>
@@ -1226,10 +1225,12 @@ async function getLiveScore(espnId,sport,league){
           if(!name) return;
           const stats = a.stats||[];
           const get = k => { const i=names.indexOf(k); return i>=0?(parseFloat(stats[i])||0):null; };
-          playerStats[name] = {
+          const row = {
             pts:get('PTS'), reb:get('REB'), ast:get('AST'), stl:get('STL'), blk:get('BLK'),
             h:get('H'), hr:get('HR'), k:get('K')??get('SO'), g:get('G')
           };
+          playerStats[name] = row;
+          if(a.athlete?.id) playerStats['id:'+a.athlete.id] = row; // exact-ID lookup, no name-fuzzing
         });
       });
     });
@@ -1259,10 +1260,83 @@ async function searchGames(q) {
                name:e.name, shortName:e.shortName,
                homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
                awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
+               homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
                homeScore:home?.score||'—', awayScore:away?.score||'—',
                statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'', date:e.date };
     });
   } catch(e){ return []; }
+}
+
+// ════════════════════════════════════════════════════════
+// ESPN ROSTER LOOKUP (for player prop legs)
+// ════════════════════════════════════════════════════════
+const _rosterCache = {}; // teamId → [{id,name,pos}]
+async function getTeamRoster(sport, league, teamId){
+  if(!teamId) return [];
+  if(_rosterCache[teamId]) return _rosterCache[teamId];
+  try{
+    const d = await fetchFallback(`${ESPN}/${sport}/${league}/teams/${teamId}/roster`);
+    const players = (d.athletes||[]).flatMap(group=>group.items||group.athletes||[group]).filter(a=>a && (a.id||a.athlete?.id));
+    const list = players.map(a=>({
+      id: a.id||a.athlete?.id, name: a.fullName||a.displayName||a.athlete?.displayName||'',
+      pos: a.position?.abbreviation||''
+    })).filter(p=>p.id&&p.name);
+    _rosterCache[teamId] = list;
+    return list;
+  }catch(e){ return []; }
+}
+async function loadPropRoster(){
+  const el = document.getElementById('prop-player-results'); if(!el) return;
+  if(!legGame){ el.innerHTML=''; el.style.display='none'; return; }
+  el.innerHTML = '<div class="gitem"><span class="sw-loading">Loading roster...</span></div>';
+  el.style.display='block';
+  const [homeRoster, awayRoster] = await Promise.all([
+    getTeamRoster(legGame.sport, legGame.league, legGame.homeTeamId),
+    getTeamRoster(legGame.sport, legGame.league, legGame.awayTeamId),
+  ]);
+  _propRoster = [
+    ...homeRoster.map(p=>({...p, team:legGame.homeTeam})),
+    ...awayRoster.map(p=>({...p, team:legGame.awayTeam})),
+  ];
+  filterPropRoster(document.getElementById('prop-player')?.value||'');
+}
+let _propRoster = [];
+function filterPropRoster(q){
+  const el = document.getElementById('prop-player-results'); if(!el) return;
+  if(!_propRoster.length){ el.innerHTML = legGame?'<div class="gitem"><span class="sw-err">No roster found — you can still type a name manually.</span></div>':''; el.style.display=legGame?'block':'none'; return; }
+  const ql = (q||'').toLowerCase().trim();
+  const matches = _propRoster.filter(p=>!ql||p.name.toLowerCase().includes(ql)).slice(0,8);
+  if(!matches.length){ el.innerHTML='<div class="gitem"><span class="sw-err">No matching player — type a name manually.</span></div>'; el.style.display='block'; return; }
+  el.innerHTML = matches.map(p=>`<div class="gitem" onclick="pickPropPlayer('${p.id}')">${esc(p.name)} <span style="color:var(--muted);font-size:.72rem;">${esc(p.pos)} · ${esc(p.team)}</span></div>`).join('');
+  el.style.display='block';
+}
+function pickPropPlayer(id){
+  const p = _propRoster.find(x=>String(x.id)===String(id)); if(!p) return;
+  propPlayerId = p.id;
+  const inp = document.getElementById('prop-player'); if(inp) inp.value = p.name;
+  const el = document.getElementById('prop-player-results'); if(el){ el.style.display='none'; el.innerHTML=''; }
+  updatePropAutoPick();
+}
+let propPlayerId = null;
+function updatePropAutoPick(){
+  const player = document.getElementById('prop-player')?.value.trim()||'';
+  const line = document.getElementById('prop-line')?.value.trim()||'';
+  const pickEl = document.getElementById('leg-pick'); if(!pickEl) return;
+  if(player||line) pickEl.value = [player, line].filter(Boolean).join(' ');
+}
+
+const PROP_TYPES_BY_LEAGUE = {
+  'mlb':                     ['Hits','Total Bases','Home Run','RBIs','Strikeouts','Earned Runs'],
+  'nba':                     ['Points','Rebounds','Assists','3PM','Pts+Reb+Ast','Steals'],
+  'nfl':                     ['Pass Yds','Rush Yds','Rec Yds','Receptions','Anytime TD'],
+  'college-football':        ['Pass Yds','Rush Yds','Rec Yds','Receptions','Anytime TD'],
+  'mens-college-basketball': ['Points','Rebounds','Assists','3PM','Pts+Reb+Ast','Steals'],
+  'nhl':                     ['Anytime Goalscorer','Points','Shots'],
+};
+function renderPropTypeOptions(){
+  const sel = document.getElementById('prop-type'); if(!sel) return;
+  const list = (legGame && PROP_TYPES_BY_LEAGUE[legGame.league]) || [];
+  sel.innerHTML = [...list, 'Custom Prop'].map(t=>`<option>${esc(t)}</option>`).join('');
 }
 
 // ════════════════════════════════════════════════════════
@@ -1395,21 +1469,25 @@ function getPlayerPropStatus(leg, s){
   if(!prop||!s?.playerStats) return null;
   const { playerName, isOver, line, statKey } = prop;
   const all = Object.keys(s.playerStats);
-  // Try exact, then contains, then last name
-  let matched = all.find(n=>n===playerName)
+  // Exact ESPN ID match (from roster lookup) beats name-fuzzing entirely
+  let matched = leg?.playerId && all.includes('id:'+leg.playerId) ? 'id:'+leg.playerId : null;
+  // Fallback: try exact name, then contains, then last name
+  matched = matched
+    || all.find(n=>n===playerName)
     || all.find(n=>n.includes(playerName)||playerName.includes(n))
     || (() => { const last=playerName.split(/\s+/).pop(); return last&&last.length>2?all.find(n=>n.split(/\s+/).pop()===last):null; })();
   if(!matched) return null;
   const val = s.playerStats[matched][statKey];
   if(val===null||val===undefined) return null;
+  const displayName = matched.startsWith('id:') ? (leg?.player||playerName) : matched;
   const scheduled = s.statusName==='STATUS_SCHEDULED';
-  if(scheduled) return { type:'prop', covering:null, playerName:matched, statKey, val, line, isOver, label:`${isOver?'O':'U'} ${line} ${statKey.toUpperCase()} · ${val}` };
+  if(scheduled) return { type:'prop', covering:null, playerName:displayName, statKey, val, line, isOver, label:`${isOver?'O':'U'} ${line} ${statKey.toUpperCase()} · ${val}` };
   const covering = isOver ? val>=line : val<line;
   const sl = statKey.toUpperCase();
   const label = isOver
     ? (covering ? `✓ ${val} ${sl} · over ${line}` : `${val} ${sl} · need ${(line-val).toFixed(1)} more`)
     : (covering ? `✓ ${val} ${sl} · ${(line-val).toFixed(1)} to bust` : `✗ ${val} ${sl} · busted by ${(val-line).toFixed(1)}`);
-  return { type:'prop', covering, playerName:matched, statKey, val, line, isOver, label };
+  return { type:'prop', covering, playerName:displayName, statKey, val, line, isOver, label };
 }
 
 // ════════════════════════════════════════════════════════
@@ -1438,8 +1516,94 @@ async function doSearch(q){
     </div>`;
   }).join('');
 }
-function selectGame(g){ legGame=g; document.getElementById('game-search').value=''; document.getElementById('game-results').style.display='none'; renderSelGame(); }
-function renderSelGame(){ const el=document.getElementById('leg-sel-game'); if(!el) return; el.innerHTML=legGame?`<div class="sel-tag">📡 ${esc(legGame.name)}<button onclick="legGame=null;renderSelGame()">✕</button></div>`:''; }
+function selectGame(g){
+  legGame=g; document.getElementById('game-search').value=''; document.getElementById('game-results').style.display='none';
+  renderSelGame(); renderMarketSelector();
+  if(currentLegType==='prop'){ renderPropTypeOptions(); loadPropRoster(); }
+}
+function renderSelGame(){ const el=document.getElementById('leg-sel-game'); if(!el) return; el.innerHTML=legGame?`<div class="sel-tag">📡 ${esc(legGame.name)}<button onclick="legGame=null;renderSelGame();renderMarketSelector();_propRoster=[];filterPropRoster('');">✕</button></div>`:''; }
+
+// ════════════════════════════════════════════════════════
+// STRUCTURED PICK TYPES — sport-aware markets per league
+// ════════════════════════════════════════════════════════
+const MARKET_TABLE = {
+  'mlb':                     [{k:'ml',label:'ML'},{k:'spread',label:'Run Line',suffix:'Run Line',defLine:'1.5'},{k:'total',label:'Total'},{k:'f5ml',label:'F5 ML'},{k:'f5total',label:'F5 Total',period:'F5'}],
+  'nfl':                     [{k:'ml',label:'ML'},{k:'spread',label:'Spread'},{k:'total',label:'Total'},{k:'1hspread',label:'1H Spread',period:'1H'},{k:'1htotal',label:'1H Total',period:'1H'},{k:'2hspread',label:'2H Spread',period:'2H'},{k:'2htotal',label:'2H Total',period:'2H'}],
+  'nba':                     [{k:'ml',label:'ML'},{k:'spread',label:'Spread'},{k:'total',label:'Total'},{k:'1htotal',label:'1H Total',period:'1H'},{k:'2htotal',label:'2H Total',period:'2H'}],
+  'college-football':        [{k:'ml',label:'ML'},{k:'spread',label:'Spread'},{k:'total',label:'Total'},{k:'1hspread',label:'1H Spread',period:'1H'},{k:'1htotal',label:'1H Total',period:'1H'}],
+  'mens-college-basketball': [{k:'ml',label:'ML'},{k:'spread',label:'Spread'},{k:'total',label:'Total'},{k:'1htotal',label:'1H Total',period:'1H'}],
+  'nhl':                     [{k:'ml',label:'ML'},{k:'spread',label:'Puck Line',suffix:'Puck Line',defLine:'1.5'},{k:'total',label:'Total'}],
+  'usa.1':                   [{k:'ml',label:'ML'},{k:'total',label:'Total'}],
+};
+const DEFAULT_MARKETS = [{k:'ml',label:'ML'},{k:'spread',label:'Spread'},{k:'total',label:'Total'}];
+let currentMarket=null, marketTeam='home', marketOU='Over', marketLine='';
+
+function currentMarketList(){ return (legGame && (MARKET_TABLE[legGame.league]||DEFAULT_MARKETS)) || DEFAULT_MARKETS; }
+function renderMarketSelector(){
+  const wrap = document.getElementById('market-wrap'); if(!wrap) return;
+  currentMarket=null;
+  if(!legGame){ wrap.innerHTML=''; return; }
+  const markets = currentMarketList();
+  wrap.innerHTML = `
+    <div class="alf-title" style="margin-top:10px;">Market</div>
+    <div class="chips" id="market-chips">${markets.map(m=>`<button class="chip" data-k="${m.k}" onclick="pickMarket('${m.k}')">${m.label}</button>`).join('')}</div>
+    <div id="market-form"></div>`;
+}
+function pickMarket(k){
+  currentMarket = currentMarketList().find(m=>m.k===k); if(!currentMarket) return;
+  marketTeam='home'; marketOU='Over'; marketLine=currentMarket.defLine||'';
+  document.querySelectorAll('#market-chips .chip').forEach(b=>b.classList.toggle('on', b.dataset.k===k));
+  renderMarketForm();
+}
+function renderMarketForm(){
+  const el=document.getElementById('market-form'); if(!el) return;
+  if(!currentMarket||!legGame){ el.innerHTML=''; return; }
+  const isTotal = currentMarket.k.includes('total');
+  const isML = currentMarket.k==='ml'||currentMarket.k==='f5ml';
+  let html='<div class="chips" style="margin-top:6px;">';
+  if(isTotal){
+    html+=`<button class="chip ou-chip" data-v="Over" onclick="setMarketOU('Over')">Over</button>
+           <button class="chip ou-chip" data-v="Under" onclick="setMarketOU('Under')">Under</button>`;
+  } else {
+    html+=`<button class="chip team-chip" data-v="away" onclick="setMarketTeam('away')">${esc(legGame.awayFullName||legGame.awayTeam)}</button>
+           <button class="chip team-chip" data-v="home" onclick="setMarketTeam('home')">${esc(legGame.homeFullName||legGame.homeTeam)}</button>`;
+  }
+  html+='</div>';
+  if(!isML){
+    html+=`<input type="text" id="market-line" placeholder="Line, e.g. ${isTotal?'7.5':'-1.5'}" value="${esc(marketLine)}" oninput="setMarketLine(this.value)" style="margin-top:6px;width:100%;">`;
+  }
+  el.innerHTML=html;
+  syncMarketChipClasses();
+  updateAutoPick();
+}
+function syncMarketChipClasses(){
+  document.querySelectorAll('.ou-chip').forEach(b=>b.classList.toggle('on', b.dataset.v===marketOU));
+  document.querySelectorAll('.team-chip').forEach(b=>b.classList.toggle('on', b.dataset.v===marketTeam));
+}
+function setMarketTeam(t){ marketTeam=t; syncMarketChipClasses(); updateAutoPick(); }
+function setMarketOU(v){ marketOU=v; syncMarketChipClasses(); updateAutoPick(); }
+function setMarketLine(v){ marketLine=v; updateAutoPick(); }
+function updateAutoPick(){
+  if(!currentMarket||!legGame) return;
+  const pickEl = document.getElementById('leg-pick'); if(!pickEl) return;
+  const teamAbbr = marketTeam==='home' ? legGame.homeTeam : legGame.awayTeam;
+  const line = (marketLine||'').trim();
+  let pick='';
+  if(currentMarket.k==='ml'){
+    pick = `${teamAbbr} ML`;
+  } else if(currentMarket.k==='f5ml'){
+    pick = `${teamAbbr} F5 ML`;
+  } else if(currentMarket.k.includes('total')){
+    const n = parseFloat(line);
+    pick = [currentMarket.period, marketOU, isNaN(n)?'':n].filter(v=>v!==''&&v!=null).join(' ');
+  } else {
+    const n = parseFloat(line);
+    const signed = isNaN(n) ? '' : (n>=0?`+${n}`:`${n}`);
+    const tag = currentMarket.suffix?`(${currentMarket.suffix})`:currentMarket.period?`(${currentMarket.period})`:'';
+    pick = [teamAbbr, signed, tag].filter(Boolean).join(' ');
+  }
+  pickEl.value = pick;
+}
 
 // ════════════════════════════════════════════════════════
 // BET TYPE / LEG TYPE
@@ -1456,8 +1620,10 @@ function setLegType(t){
   currentLegType=t;
   document.getElementById('ltype-game-btn').className='chip'+(t==='game'?' on':'');
   document.getElementById('ltype-prop-btn').className='chip'+(t==='prop'?' prop-on':'');
-  document.getElementById('leg-game-sec').style.display=t==='game'?'block':'none';
+  // Game search is shared by both leg types; only the market chips vs. prop fields differ.
+  document.getElementById('market-wrap').style.display=t==='game'?'block':'none';
   document.getElementById('leg-prop-sec').style.display=t==='prop'?'block':'none';
+  if(t==='prop'){ renderPropTypeOptions(); if(legGame) loadPropRoster(); }
 }
 
 // ════════════════════════════════════════════════════════
@@ -1474,10 +1640,12 @@ function addLeg(){
     leg.player=player; leg.propType=document.getElementById('prop-type')?.value||'';
     leg.line=document.getElementById('prop-line')?.value.trim()||'';
     leg.gameContext=document.getElementById('prop-ctx')?.value.trim()||'';
+    if(legGame) leg.game=legGame;
+    if(propPlayerId) leg.playerId=propPlayerId; // exact ESPN ID match, no name-fuzzing
   }
   builtLegs.push(leg);
   ['leg-pick','prop-player','prop-line','prop-ctx'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
-  legGame=null; renderSelGame(); renderBuiltLegs();
+  legGame=null; propPlayerId=null; _propRoster=[]; renderSelGame(); renderMarketSelector(); renderBuiltLegs();
 }
 function removeLeg(i){ builtLegs.splice(i,1); renderBuiltLegs(); }
 function renderBuiltLegs(){
@@ -2335,7 +2503,8 @@ function openAddBetModal(){
   builtLegs=[]; legGame=null; currentBetType='straight'; currentLegType='game';
   ['bet-amount','bet-odds','bet-notes','ff-desc','leg-pick','prop-player','prop-line','prop-ctx'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.getElementById('bet-status').value='pending';
-  renderBuiltLegs(); renderSelGame(); setBetType('straight'); setLegType('game'); buildSportChips();
+  _propRoster=[]; propPlayerId=null;
+  renderBuiltLegs(); renderSelGame(); renderMarketSelector(); renderPropTypeOptions(); setBetType('straight'); setLegType('game'); buildSportChips();
   renderFriendSelect('bet-person');
   // Auto-select next person in rotation
   const nextP = getNextPerson();

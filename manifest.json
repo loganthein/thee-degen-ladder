@@ -1,0 +1,18 @@
+{
+  "name": "Thee Degenerate Idiots Bet Ladder",
+  "short_name": "Bet Ladder",
+  "description": "Track your group betting ladder with friends",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111318",
+  "theme_color": "#111318",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

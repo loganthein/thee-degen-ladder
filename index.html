@@ -1,0 +1,3013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thee Degenerate Idiots Bet Ladder</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#111318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bet Ladder">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+  FIREBASE CONFIG — REPLACE THESE VALUES WITH YOUR OWN
+  Firebase Console → Project Settings → Your Apps → Web App
+============================================================ -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {
+  getFirestore, collection, doc, getDoc, setDoc, onSnapshot,
+  addDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// 🔥 REPLACE THIS BLOCK WITH YOUR FIREBASE CONFIG 🔥
+const firebaseConfig = {
+  apiKey: "AIzaSyBs-HJz0s9dMcauLPT7H5OPB1k9Ax3vtA0",
+  authDomain: "thee-degen-ladder.firebaseapp.com",
+  projectId: "thee-degen-ladder",
+  storageBucket: "thee-degen-ladder.firebasestorage.app",
+  messagingSenderId: "27262663189",
+  appId: "1:27262663189:web:5cfbe84bd81435e5122c1c"
+};
+// 🔥 END CONFIG 🔥
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const betsCol     = collection(db, 'bets');
+const friendsCol  = collection(db, 'friends');
+const archiveCol  = collection(db, 'archive'); // completed ladders
+const rotationCol  = collection(db, 'rotation');   // betting order
+const reactionsCol = collection(db, 'reactions');  // emoji reactions
+const tokensCol    = collection(db, 'pushTokens'); // push notification tokens
+
+window._state = { bets: [], friends: [], archive: [], rotation: [], reactions: {}, settings: {} };
+window._db = db;
+
+onSnapshot(query(betsCol,    orderBy('createdAt','asc')), snap => {
+  window._state.bets    = snap.docs.map(d => ({id:d.id,...d.data()}));
+  window.render && window.render();
+});
+onSnapshot(query(friendsCol, orderBy('name','asc')), snap => {
+  window._state.friends = snap.docs.map(d => ({id:d.id,...d.data()}));
+  window.render && window.render();
+});
+onSnapshot(query(archiveCol, orderBy('completedAt','asc')), snap => {
+  window._state.archive = snap.docs.map(d => ({id:d.id,...d.data()}));
+  window.render && window.render();
+});
+onSnapshot(collection(db,'rotation'), snap => {
+  const doc = snap.docs.find(d=>d.id==='order');
+  window._state.rotation = doc ? (doc.data().names||[]) : [];
+  window.render && window.render();
+});
+onSnapshot(reactionsCol, snap => {
+  window._state.reactions = {};
+  snap.docs.forEach(d => { window._state.reactions[d.id] = d.data(); });
+  window.render && window.render();
+});
+onSnapshot(doc(db,'settings','config'), snap => {
+  window._state.settings = snap.exists() ? snap.data() : {};
+  window.render && window.render();
+});
+
+window.db_addBet      = async b  => { b.createdAt = serverTimestamp(); await addDoc(betsCol, b); };
+window.db_updateBet   = async (id,d) => updateDoc(doc(db,'bets',id), d);
+window.db_deleteBet   = async id => deleteDoc(doc(db,'bets',id));
+window.db_addFriend   = async n  => addDoc(friendsCol, {name:n});
+window.db_deleteFriend= async id => deleteDoc(doc(db,'friends',id));
+window.db_saveRotation = async (names) => {
+  await setDoc(doc(db,'rotation','order'), { names });
+};
+window.db_toggleReaction = async (betId, emoji, personName) => {
+  const ref = doc(db,'reactions',betId);
+  const existing = window._state.reactions[betId]||{};
+  const arr = existing[emoji]||[];
+  const has = arr.includes(personName);
+  await setDoc(ref, { ...existing, [emoji]: has ? arr.filter(n=>n!==personName) : [...arr,personName] });
+};
+window.db_savePushToken = async (token) => {
+  await setDoc(doc(db,'pushTokens',token), { token, savedAt: serverTimestamp() });
+};
+window.db_saveSettings  = async (data) => {
+  await setDoc(doc(db,'settings','config'), data, {merge:true});
+};
+window.db_getSettings = async () => {
+  const snap = await getDoc(doc(db,'settings','config'));
+  return snap.exists() ? snap.data() : {};
+};
+window.db_deleteLadder = async id => deleteDoc(doc(db,'archive',id));
+window.db_archiveLadder = async (bets, outcome) => {
+  // outcome = { result: 'won'|'lost', failedOnRung: n|null }
+  await addDoc(archiveCol, { bets, outcome: outcome||{result:'won',failedOnRung:null}, completedAt: serverTimestamp() });
+  for (const b of bets) await deleteDoc(doc(db,'bets',b.id));
+  // Advance rotation past whoever bet last, so the next person in sequence starts fresh
+  if(bets.length > 0){
+    const lastBettor = bets[bets.length-1].person;
+    const rot = window._state?.rotation||[];
+    if(rot.length > 1){
+      const idx = rot.findIndex(n => n.toLowerCase() === lastBettor.toLowerCase());
+      if(idx >= 0){
+        const newRot = [...rot.slice(idx+1), ...rot.slice(0, idx+1)];
+        await setDoc(doc(db,'rotation','order'), { names: newRot });
+      }
+    }
+  }
+};
+</script>
+
+<style>
+:root,[data-theme="dark"]{
+  --bg:#0a0a0a;--surface:#141414;--surface2:#1e1e1e;--border:#2a2a2a;
+  --gold:#f5c842;--gold-dim:#c9a228;--green:#3ecf6e;--red:#f05252;
+  --text:#f0f0f0;--muted:#666;
+  --card-shadow:0 2px 12px rgba(0,0,0,.6);
+  --header-blur:blur(12px);
+  --surface-gold:#1a1600;--border-gold:#4a3500;
+  --surface-green:#0c1e13;--border-green:#1a3d2a;
+  --surface-red:#1e0c0c;--border-red:#3d1a1a;
+  --surface-purple:#1a0a2a;--border-purple:#3a1a5a;
+}
+[data-theme="dim"]{
+  --bg:#111318;--surface:#1c1f26;--surface2:#242830;--border:#333844;
+  --gold:#f5c842;--gold-dim:#c9a228;--green:#3ecf6e;--red:#f05252;
+  --text:#e8eaf0;--muted:#6b7280;
+  --card-shadow:0 2px 12px rgba(0,0,0,.4);
+  --header-blur:blur(12px);
+  --surface-gold:#1e1a00;--border-gold:#4a3500;
+  --surface-green:#0e2418;--border-green:#1a3d2a;
+  --surface-red:#231010;--border-red:#3d1a1a;
+  --surface-purple:#1e0e30;--border-purple:#3a1a5a;
+}
+[data-theme="light"]{
+  --bg:#f5f5f7;--surface:#ffffff;--surface2:#f0f0f2;--border:#e0e0e5;
+  --gold:#c9880a;--gold-dim:#a06c08;--green:#1a9e4a;--red:#d93025;
+  --text:#111111;--muted:#888899;
+  --card-shadow:0 2px 12px rgba(0,0,0,.08);
+  --header-blur:blur(12px);
+  --surface-gold:#fff8e1;--border-gold:#c9a228;
+  --surface-green:#e8f8ef;--border-green:#1a9e4a;
+  --surface-red:#fde8e8;--border-red:#d93025;
+  --surface-purple:#f3e8ff;--border-purple:#9b59b6;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+/* ── HEADER ── */
+header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;background:var(--bg);backdrop-filter:var(--header-blur);-webkit-backdrop-filter:var(--header-blur);z-index:100;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:4px;background:linear-gradient(135deg,var(--gold) 0%,#ffe066 50%,var(--gold-dim) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 8px rgba(245,200,66,.25));}
+/* theme toggle */
+.theme-toggle{display:flex;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px;}
+.theme-btn{background:transparent;border:none;cursor:pointer;padding:4px 9px;border-radius:16px;font-size:.65rem;font-family:'DM Mono',monospace;color:var(--muted);transition:all .15s;white-space:nowrap;}
+.theme-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.3);}
+/* logo now in header block */
+.logo span{color:var(--muted);font-size:0.82rem;letter-spacing:1px;font-family:'DM Mono',monospace;margin-left:12px;}
+.header-actions{display:flex;gap:10px;align-items:center;}
+.sync-pill{display:flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--muted);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(62,207,110,.5);}
+.sync-dot.off{background:var(--red);box-shadow:0 0 6px rgba(240,82,82,.4);}
+
+/* ── BUTTONS ── */
+.btn{padding:8px 18px;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:var(--gold);color:#000;}
+.btn-primary:hover{background:#ffd84d;transform:translateY(-1px);}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold);}
+.btn-green{background:var(--green);color:#000;font-weight:700;}
+.btn-green:hover{background:#5af08a;transform:translateY(-1px);}
+.btn-sm{padding:5px 12px;font-size:0.78rem;}
+.btn-danger{background:transparent;color:var(--red);border:1px solid var(--border-red);}
+.btn-danger:hover{background:var(--surface-red);}
+
+/* ── LAYOUT ── */
+.container{max-width:1100px;margin:0 auto;padding:2rem;}
+
+/* ── SETUP BANNER ── */
+.setup-banner{background:var(--surface-gold);border:1px solid var(--border-gold);border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1.5rem;display:none;}
+.setup-banner.show{display:block;}
+.setup-banner h3{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:var(--gold);margin-bottom:6px;}
+.setup-banner p{font-size:0.83rem;color:var(--muted);line-height:1.6;}
+.setup-banner code{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--gold);}
+
+/* ── WIN CELEBRATION ── */
+.win-banner{display:none;background:var(--surface-green);border:2px solid var(--green);border-radius:14px;padding:2rem 2rem 1.5rem;margin-bottom:1.5rem;text-align:center;}
+.win-banner.show{display:block;animation:popIn .4s cubic-bezier(.34,1.56,.64,1);}
+@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+.win-emoji{font-size:3rem;line-height:1;margin-bottom:.4rem;}
+.win-title{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:5px;color:var(--green);line-height:1;}
+.win-sub{font-size:.88rem;color:var(--muted);margin:.4rem 0 .8rem;}
+.win-amount{font-family:'Bebas Neue',sans-serif;font-size:4rem;color:var(--gold);letter-spacing:2px;line-height:1;margin-bottom:1.2rem;}
+.win-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+
+/* ── PROGRESS + ROTATION (combined) ── */
+.progress-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.4rem;margin-bottom:1.5rem;}
+.pb-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.pb-label{font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
+.pb-count{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px;color:var(--gold);}
+/* Named slot bubbles replace the plain bar */
+.pb-slots{display:flex;gap:3px;flex-wrap:nowrap;width:100%;}
+.pb-slot{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden;}
+.pb-slot-bar{width:100%;height:6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);transition:all .35s;}
+.pb-slot-bar.won{background:var(--green);border-color:var(--green);box-shadow:0 0 5px rgba(62,207,110,.3);}
+.pb-slot-bar.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 5px rgba(245,200,66,.4);}
+.pb-slot-bar.lost{background:var(--red);border-color:var(--red);}
+.pb-slot-name{font-family:'DM Mono',monospace;font-size:.58rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:color .3s;}
+.pb-slot-name.won{color:var(--green);}
+.pb-slot-name.active{color:var(--gold);}
+.pb-slot-name.lost{color:var(--red);}
+.pb-slot-name.next{color:#8ab;}
+.pb-footer{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);margin-top:8px;}
+.pb-footer span{color:var(--gold);}
+
+/* ── STATS BAR ── */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.4rem;box-shadow:var(--card-shadow);position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-label{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+.stat-value{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;letter-spacing:1px;line-height:1;}
+.sv-gold{color:var(--gold);}
+.sv-green{color:var(--green);}
+.sv-red{color:var(--red);}
+
+/* ── SECTION TITLE ── */
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--muted);margin-bottom:1rem;}
+
+/* ── LADDER RUNGS ── */
+.ladder-rung{display:grid;grid-template-columns:36px 1fr;}
+.rung-line{display:flex;flex-direction:column;align-items:center;}
+.rung-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:transparent;flex-shrink:0;margin-top:20px;z-index:1;transition:all .3s;}
+.rung-dot.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 12px var(--gold-dim);}
+.rung-dot.won{background:var(--green);border-color:var(--green);box-shadow:0 0 10px rgba(62,207,110,.4);}
+.rung-dot.lost{background:var(--red);border-color:var(--red);}
+.rung-connector{width:2px;flex:1;min-height:10px;background:var(--border);}
+.rung-connector.filled{background:var(--green);}
+
+/* ── BET CARDS ── */
+.rung-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:10px;padding:1rem 1.2rem;margin:7px 0;transition:border-color .2s,background .2s,box-shadow .2s;box-shadow:var(--card-shadow);}
+.rung-card.c-active{border-color:var(--gold);border-left-color:var(--gold);background:var(--surface-gold);box-shadow:0 0 0 1px rgba(245,200,66,.12),var(--card-shadow);}
+.rung-card.c-won{border-color:var(--border-green);border-left-color:var(--green);background:var(--surface-green);}
+.rung-card.c-lost{border-color:var(--border-red);border-left-color:var(--red);background:var(--surface-red);}
+.rung-card.c-hitting{border-color:var(--green)!important;background:var(--surface-green)!important;box-shadow:0 0 18px rgba(62,207,110,.15);}
+
+.rung-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;flex-wrap:wrap;gap:6px;}
+.rung-person{font-weight:600;font-size:.94rem;}
+.badge-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
+
+.badge{font-family:'DM Mono',monospace;font-size:.67rem;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.8px;}
+.b-pending{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.b-active{background:var(--surface-gold);color:var(--gold);border:1px solid var(--border-gold);}
+.b-won{background:var(--surface-green);color:var(--green);border:1px solid var(--border-green);}
+.b-lost{background:var(--surface-red);color:var(--red);border:1px solid var(--border-red);}
+.b-parlay{background:var(--surface-purple);color:#b57bee;border:1px solid var(--border-purple);}
+.b-hitting{background:var(--surface-green);color:var(--green);border:1px solid var(--border-green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+
+.rung-details{display:flex;gap:1.4rem;font-size:.81rem;flex-wrap:wrap;margin-bottom:7px;}
+.det{display:flex;flex-direction:column;gap:1px;}
+.det-lbl{font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);}
+.det-val{color:var(--text);font-weight:500;}
+.det-val.gold{color:var(--gold);font-family:'DM Mono',monospace;}
+.det-val.green{color:var(--green);font-family:'DM Mono',monospace;}
+
+/* ── LEGS ── */
+.legs-wrap{margin-top:9px;}
+.legs-lbl{font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
+.leg{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;margin-bottom:5px;transition:border-color .2s,background .2s;}
+.leg.lh{border-color:var(--border-green);background:var(--surface-green);}
+.leg.lp{border-color:var(--border-purple);}
+.leg-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.leg-name{font-size:.84rem;font-weight:600;}
+.leg-pick{font-size:.78rem;color:var(--muted);margin-top:2px;}
+.ltag{font-family:'DM Mono',monospace;font-size:.6rem;padding:2px 7px;border-radius:10px;text-transform:uppercase;flex-shrink:0;}
+.ltag-game{background:var(--surface2);color:#7aabbb;border:1px solid var(--border);}
+.ltag-prop{background:var(--surface-purple);color:#b57bee;border:1px solid var(--border-purple);}
+
+/* ── SCORE WIDGET ── */
+.score-w{margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;transition:border-color .2s,background .2s;}
+.score-w.sh{border-color:var(--green);background:var(--surface);}
+.sw-teams{display:flex;align-items:center;gap:11px;}
+.sw-team{display:flex;flex-direction:column;align-items:center;min-width:44px;text-align:center;}
+.sw-abb{font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;}
+.sw-score{font-family:'Bebas Neue',sans-serif;font-size:1.75rem;line-height:1;color:var(--text);}
+.sw-bet-indicator{font-family:'DM Mono',monospace;font-size:.65rem;margin-top:5px;padding:2px 7px;border-radius:10px;border:1px solid;display:inline-block;}
+.sw-bet-indicator.covering{color:var(--green);border-color:var(--green);background:var(--surface2);}
+.sw-bet-indicator.losing{color:var(--red);border-color:var(--red);background:var(--surface2);}
+.sw-bet-indicator.neutral{color:var(--muted);border-color:var(--border);background:var(--surface2);}
+.sw-score.winning{color:var(--green);}
+.sw-vs{font-size:.66rem;color:var(--muted);font-family:'DM Mono',monospace;}
+.sw-meta{text-align:right;}
+.sw-status{font-family:'DM Mono',monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;}
+.sw-status.live{color:var(--red);}
+.sw-status.final{color:var(--muted);}
+.sw-status.upcoming{color:var(--gold);}
+.sw-detail{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.sw-refresh{font-size:.62rem;color:var(--muted);cursor:pointer;text-decoration:underline;margin-top:3px;}
+.sw-refresh:hover{color:var(--gold);}
+.sw-total-row{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin:3px 0;letter-spacing:.5px;}
+.sw-total-row b{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--text);letter-spacing:1px;margin-left:3px;}
+.sw-loading{color:var(--muted);font-size:.76rem;font-style:italic;}
+.sw-err{color:var(--red);font-size:.7rem;}
+.prop-note{font-size:.78rem;color:#b57bee;margin-top:3px;font-style:italic;}
+
+.rung-note{margin-top:7px;font-size:.79rem;color:var(--muted);font-style:italic;border-top:1px solid var(--border);padding-top:7px;}
+.rung-actions{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;}
+
+.empty{text-align:center;padding:3.5rem 1rem;color:var(--muted);}
+.empty .big{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;color:var(--border);letter-spacing:4px;}
+
+/* ── LEADERBOARD ── */
+.lb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1rem;margin-bottom:3rem;}
+.lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.2rem;position:relative;overflow:hidden;}
+.lb-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
+.lb-card.pos::before{background:var(--green);}
+.lb-card.neg::before{background:var(--red);}
+.lb-card.neu::before{background:var(--border);}
+.lb-rank{position:absolute;top:10px;right:12px;font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--border);letter-spacing:1px;}
+.lb-rank.r1{color:#d4a017;}
+.lb-rank.r2{color:#9e9e9e;}
+.lb-rank.r3{color:#8b5e3c;}
+.lb-name{font-weight:600;font-size:.88rem;margin-bottom:10px;padding-right:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lb-row{display:flex;gap:14px;flex-wrap:wrap;}
+.lb-stat{display:flex;flex-direction:column;gap:1px;}
+.lb-stat-lbl{font-family:'DM Mono',monospace;font-size:.58rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.lb-stat-val{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:1px;line-height:1.1;}
+.lv-g{color:var(--green);}
+.lv-r{color:var(--red);}
+.lv-gold{color:var(--gold);}
+.lb-rate{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.lb-rate b{color:var(--text);}
+.lb-empty{color:var(--muted);font-size:.85rem;padding:.5rem 0;}
+
+/* ── STANDINGS TABLE ── */
+.standings-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem;}
+.standings-table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.78rem;}
+.standings-table th{padding:.5rem .85rem;text-align:left;color:var(--muted);font-size:.62rem;letter-spacing:1px;text-transform:uppercase;background:var(--surface2);border-bottom:1px solid var(--border);white-space:nowrap;}
+.standings-table td{padding:.6rem .85rem;border-bottom:1px solid var(--border);white-space:nowrap;}
+.standings-table tr:last-child td{border-bottom:none;}
+.standings-table tbody tr:hover td{background:var(--surface2);}
+.st-rank{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;letter-spacing:1px;color:var(--muted);}
+.st-rank.r1{color:#d4a017;}.st-rank.r2{color:#9e9e9e;}.st-rank.r3{color:#8b5e3c;}
+.st-name{font-weight:700;color:var(--text);font-size:.82rem;}
+.st-rec{color:var(--text);}
+.st-pct{color:var(--muted);}
+.st-net{font-weight:700;}
+.st-net.pos{color:var(--green);}.st-net.neg{color:var(--red);}.st-net.neu{color:var(--muted);}
+.st-odds{font-weight:600;}
+.st-odds.dog{color:var(--green);}.st-odds.chalk{color:var(--muted);}
+.style-badge{display:inline-block;padding:2px 9px;border-radius:4px;font-size:.62rem;letter-spacing:.5px;font-weight:700;text-transform:uppercase;}
+.style-badge.agg{background:var(--surface-purple);color:#c084fc;border:1px solid var(--border-purple);}
+.style-badge.bal{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.style-badge.con{background:var(--surface-green);color:var(--green);border:1px solid var(--border-green);}
+.style-badge.chalk-h{background:var(--surface-gold);color:var(--gold);border:1px solid var(--border-gold);}
+@media(max-width:640px){
+  .standings-table th,.standings-table td{padding:.45rem .55rem;}
+  .standings-table th{font-size:.58rem;letter-spacing:.5px;}
+  .standings-table{font-size:.72rem;}
+  .standings-table .st-hide-mob{display:none;}
+  .style-badge{font-size:.58rem;padding:1px 6px;}
+}
+
+/* ── WRESTLING AWARDS ── */
+.awards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1rem;margin-bottom:1.5rem;}
+.award-card{border-radius:12px;padding:1.2rem 1.4rem;position:relative;overflow:hidden;display:flex;flex-direction:column;}
+.award-icon{font-size:2rem;line-height:1;margin-bottom:.5rem;}
+.award-title{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;margin-bottom:.1rem;}
+.award-subtitle{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.5px;color:var(--muted);font-style:italic;margin-bottom:.7rem;}
+.award-champ{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;letter-spacing:2px;line-height:1.05;}
+.award-vacant{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;opacity:.35;}
+.award-stat{font-family:'DM Mono',monospace;font-size:.66rem;margin-top:.5rem;padding-top:.5rem;border-top:1px solid;}
+/* Gold — CM Punk */
+.award-gold{background:var(--surface-gold);border:1px solid var(--border-gold);}
+.award-gold .award-title{color:var(--gold);}
+.award-gold .award-champ{color:var(--gold);}
+.award-gold .award-vacant{color:var(--gold);}
+.award-gold .award-stat{color:var(--gold-dim);border-color:var(--border-gold);}
+/* Purple — Asuka */
+.award-purple{background:var(--surface-purple);border:1px solid var(--border-purple);}
+.award-purple .award-title{color:#c084fc;}
+.award-purple .award-champ{color:#c084fc;}
+.award-purple .award-vacant{color:#c084fc;}
+.award-purple .award-stat{color:#a855f7;border-color:var(--border-purple);}
+/* Green — Jeff Hardy */
+.award-green{background:var(--surface-green);border:1px solid var(--border-green);}
+.award-green .award-title{color:var(--green);}
+.award-green .award-champ{color:var(--green);}
+.award-green .award-vacant{color:var(--green);}
+.award-green .award-stat{color:#2da854;border-color:var(--border-green);}
+/* Dark — Undertaker */
+.award-dark{background:var(--surface2);border:1px solid var(--border);}
+.award-dark .award-title{color:#9e9e9e;}
+.award-dark .award-champ{color:#bbb;}
+.award-dark .award-vacant{color:#555;}
+.award-dark .award-stat{color:var(--muted);border-color:var(--border);}
+@media(max-width:640px){
+  .awards-grid{grid-template-columns:1fr 1fr;gap:.7rem;}
+  .award-card{padding:.9rem 1rem;}
+  .award-icon{font-size:1.6rem;}
+  .award-champ{font-size:1.7rem;}
+  .award-title{font-size:.9rem;}
+}
+
+/* ── STATS TABLES ROW ── */
+.stats-tables-row{display:grid;grid-template-columns:auto 1fr;gap:1rem;margin-bottom:1.5rem;align-items:start;}
+@media(max-width:640px){.stats-tables-row{grid-template-columns:1fr;}}
+/* Rung death bars */
+.rd-bar-wrap{width:80px;background:var(--surface2);border-radius:3px;height:7px;overflow:hidden;}
+.rd-bar{height:100%;border-radius:3px;background:var(--muted);}
+.rd-bar.hot{background:var(--red);}
+.rd-count-hot{color:var(--red);font-weight:700;}
+.rd-count-warn{color:var(--gold);}
+/* Form badges */
+.form-badges{display:flex;gap:3px;align-items:center;}
+.fbadge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;font-family:'DM Mono',monospace;font-size:.65rem;font-weight:700;flex-shrink:0;}
+.fbadge-w{background:var(--surface-green);color:var(--green);border:1px solid var(--border-green);}
+.fbadge-l{background:var(--surface-red);color:var(--red);border:1px solid var(--border-red);}
+.fbadge-e{background:var(--surface2);color:var(--border);border:1px solid var(--border);}
+.form-streak-w{color:var(--green);font-weight:700;}
+.form-streak-l{color:var(--red);font-weight:700;}
+
+/* ── RUNG NUMBER on card ── */
+.rung-num{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px;}
+
+/* ── DRAG-TO-REORDER in friends modal ── */
+.rotation-editor{margin-top:1.2rem;border-top:1px solid var(--border);padding-top:1rem;}
+.re-label{font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;}
+.re-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px;}
+.re-item{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;transition:background .15s,border-color .15s;}
+.re-arrows{display:flex;flex-direction:column;gap:2px;flex-shrink:0;}
+.re-arrow-btn{background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted);cursor:pointer;font-size:.65rem;padding:2px 5px;line-height:1;transition:all .15s;}
+.re-arrow-btn:hover{border-color:var(--gold);color:var(--gold);}
+.re-arrow-btn:disabled{opacity:.2;cursor:default;}
+.re-pos{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);width:16px;flex-shrink:0;}
+.re-name{flex:1;font-size:.86rem;font-weight:600;}
+.re-hint{font-size:.72rem;color:var(--muted);font-style:italic;}
+
+/* ── MODALS ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;align-items:center;justify-content:center;padding:1rem;}
+.overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:2rem;width:100%;max-width:560px;max-height:94vh;overflow-y:auto;}
+.modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:2px;margin-bottom:1.4rem;color:var(--gold);}
+.fg{margin-bottom:1rem;}
+label{display:block;font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
+input,textarea,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 13px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none;transition:border-color .15s;}
+input:focus,textarea:focus,select:focus{border-color:var(--gold);}
+select option{background:var(--surface2);}
+textarea{resize:vertical;min-height:56px;}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+.mactions{display:flex;gap:10px;margin-top:1.4rem;justify-content:flex-end;}
+
+/* ── LEGS BUILDER ── */
+.legs-builder{border:1px solid var(--border);border-radius:10px;padding:1rem;background:var(--surface2);margin-bottom:1rem;}
+.lb-title{font-family:'DM Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:9px;}
+.built-leg{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 11px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.bl-info{flex:1;min-width:0;}
+.bl-name{font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bl-pick{font-size:.73rem;color:var(--muted);}
+.alf{border-top:1px solid var(--border);padding-top:9px;margin-top:7px;}
+.alf-title{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px;}
+
+/* SPORT/TYPE CHIPS */
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px;}
+.chip{padding:4px 10px;border-radius:20px;font-size:.67rem;font-family:'DM Mono',monospace;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;}
+.chip.on{background:var(--gold);color:#000;border-color:var(--gold);}
+.chip.prop-on{background:var(--surface-purple);color:#b57bee;border-color:var(--border-purple);}
+
+/* GAME SEARCH */
+.gsw{position:relative;}
+.gresults{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:7px;z-index:500;max-height:190px;overflow-y:auto;margin-top:3px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:none;}
+.gitem{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);}
+.gitem:last-child{border-bottom:none;}
+.gitem:hover{background:var(--border);}
+.gi-name{font-size:.84rem;font-weight:500;}
+.gi-meta{font-size:.68rem;color:var(--muted);margin-top:2px;font-family:'DM Mono',monospace;}
+.gi-score{font-size:.73rem;color:var(--gold);font-family:'DM Mono',monospace;margin-top:2px;}
+.search-hint{font-size:.68rem;color:var(--muted);margin-top:4px;}
+.sel-tag{display:inline-flex;align-items:center;gap:7px;background:var(--surface-gold);border:1px solid var(--border-gold);border-radius:6px;padding:4px 9px;font-size:.76rem;color:var(--gold);margin-top:4px;}
+.sel-tag button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.9rem;line-height:1;padding:0;}
+.sel-tag button:hover{color:var(--red);}
+
+/* OUTCOME BUTTONS */
+.outcome-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:1rem;}
+.ob{padding:1.3rem;border-radius:10px;border:2px solid;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;transition:all .15s;background:transparent;}
+.ob.win{border-color:var(--green);color:var(--green);}
+.ob.win:hover{background:var(--surface-green);}
+.ob.loss{border-color:var(--red);color:var(--red);}
+.ob.loss:hover{background:var(--surface-red);}
+.ob.push{border-color:var(--muted);color:var(--muted);}
+.ob.push:hover{background:var(--surface2);}
+
+/* FRIENDS */
+.friend-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:7px;padding:8px 11px;margin-bottom:6px;}
+.af-row{display:flex;gap:8px;}
+.af-row input{flex:1;}
+
+/* ── PERSONAL STATS ── */
+.ps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1rem;margin-bottom:3rem;}
+.ps-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.ps-header{display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.1rem;cursor:pointer;transition:background .15s;}
+.ps-header:hover{background:var(--surface2);}
+.ps-name{font-weight:600;font-size:.88rem;}
+.ps-record{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);}
+.ps-record b.w{color:var(--green);}
+.ps-record b.l{color:var(--red);}
+.ps-chevron{font-size:.7rem;color:var(--muted);transition:transform .2s;}
+.ps-chevron.open{transform:rotate(180deg);}
+.ps-body{display:none;border-top:1px solid var(--border);padding:.6rem .8rem;}
+.ps-body.open{display:block;}
+.ps-bet{font-size:.78rem;padding:5px 4px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;}
+.ps-bet:last-child{border-bottom:none;}
+.ps-bet-desc{color:var(--muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ps-bet-amt{font-family:'DM Mono',monospace;font-size:.72rem;flex-shrink:0;}
+.ps-bet-amt.w{color:var(--green);}
+.ps-bet-amt.l{color:var(--red);}
+
+/* ── PAST LADDERS ── */
+.pl-list{display:flex;flex-direction:column;gap:.6rem;margin-bottom:3rem;}
+.pl-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.pl-header{display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.2rem;cursor:pointer;transition:background .15s;gap:10px;flex-wrap:wrap;}
+.pl-header:hover{background:var(--surface2);}
+.pl-header.won{border-left:3px solid var(--green);}
+.pl-header.lost{border-left:3px solid var(--red);}
+.pl-left{display:flex;align-items:center;gap:12px;}
+.pl-num{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:1px;color:var(--muted);}
+.pl-info{display:flex;flex-direction:column;gap:2px;}
+.pl-outcome{font-size:.82rem;font-weight:600;}
+.pl-outcome.won{color:var(--green);}
+.pl-outcome.lost{color:var(--red);}
+.pl-date{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);}
+.pl-chevron{font-size:.7rem;color:var(--muted);transition:transform .2s;flex-shrink:0;}
+.pl-chevron.open{transform:rotate(180deg);}
+.pl-body{display:none;border-top:1px solid var(--border);padding:.8rem 1.2rem;}
+.pl-body.open{display:block;}
+.pl-bet{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.pl-bet:last-child{border-bottom:none;}
+.pl-bet-left{display:flex;align-items:center;gap:8px;min-width:0;}
+.pl-bet-rung{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);flex-shrink:0;}
+.pl-bet-person{font-size:.8rem;font-weight:600;flex-shrink:0;}
+.pl-bet-desc{font-size:.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pl-bet-result{font-family:'DM Mono',monospace;font-size:.72rem;flex-shrink:0;}
+.pl-bet-result.w{color:var(--green);}
+.pl-bet-result.l{color:var(--red);}
+.pl-empty{color:var(--muted);font-size:.84rem;padding:.5rem 0;}
+
+/* ── END LADDER BUTTON ── */
+.btn-end{background:transparent;color:var(--red);border:1px solid var(--border-red);font-size:.75rem;padding:5px 12px;}
+.btn-end:hover{background:var(--surface-red);}
+
+/* ── TABS ── */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:0;gap:0;background:var(--bg);position:sticky;top:56px;z-index:90;}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:.65rem .4rem;font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.tab-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:all .2s;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn:hover svg{stroke:var(--text);}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-btn.active svg{stroke:var(--gold);filter:drop-shadow(0 0 4px rgba(245,200,66,.5));}
+.tab-label{font-size:.58rem;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;padding-top:.2rem;}
+
+/* Bottom tab bar on mobile */
+@media(max-width:640px){
+  .tab-bar{position:fixed;bottom:0;left:0;right:0;top:auto;border-bottom:none;border-top:1px solid var(--border);background:var(--bg);z-index:200;padding-bottom:env(safe-area-inset-bottom);}
+  .tab-btn{padding:.7rem .4rem .5rem;font-size:.58rem;}
+  .container{padding-bottom:12rem;padding-top:.8rem;}
+}
+@media(min-width:641px){
+  .tab-bar{top:64px;}
+  .tab-panel.active{padding-top:1rem;}
+  .tab-btn{flex-direction:row;gap:7px;padding:.7rem .8rem;font-size:.65rem;}
+  .tab-btn svg{width:15px;height:15px;}
+}
+
+/* ── STREAKS & RECORDS ── */
+.streak-bar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+.streak-pill{font-family:'DM Mono',monospace;font-size:.6rem;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted);white-space:nowrap;}
+.streak-pill.hot{background:var(--surface-gold);border-color:var(--border-gold);color:var(--gold);}
+.streak-pill.cold{background:var(--surface-red);border-color:var(--border-red);color:var(--red);}
+.streak-pill.best{background:var(--surface-green);border-color:var(--border-green);color:var(--green);}
+
+/* ── EMOJI REACTIONS ── */
+.reactions-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.reaction-btn{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:.82rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;}
+.reaction-btn:hover{border-color:var(--gold);transform:scale(1.1);}
+.reaction-btn.reacted{background:var(--surface-gold);border-color:var(--border-gold);}
+.reaction-btn .rc{font-size:.68rem;font-family:'DM Mono',monospace;color:var(--muted);}
+.reaction-btn.rc-zero{opacity:.45;}
+.reaction-add{background:transparent;border:1px dashed var(--border);border-radius:20px;padding:3px 9px;font-size:.82rem;cursor:pointer;color:var(--muted);transition:all .15s;}
+.reaction-add:hover{border-color:var(--gold);color:var(--gold);}
+.emoji-picker{position:absolute;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px;display:flex;gap:6px;flex-wrap:wrap;z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.7);width:200px;}
+.emoji-opt{font-size:1.2rem;cursor:pointer;padding:4px;border-radius:6px;transition:background .1s;}
+.emoji-opt:hover{background:var(--border);}
+
+/* ── PUSH NOTIFICATION BANNER ── */
+.notif-banner{background:var(--surface-green);border:1px solid var(--border-green);border-radius:10px;padding:.9rem 1.2rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.notif-banner p{font-size:.82rem;color:var(--muted);flex:1;}
+.notif-banner p b{color:var(--text);}
+
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+@media(max-width:640px){
+  /* Layout */
+  header{padding:0 .8rem;height:56px;}
+  .logo{font-size:1rem;letter-spacing:1px;}
+  .btn{padding:7px 12px;font-size:.8rem;}
+  .sync-pill{display:none;}
+  .container{padding:.8rem;}
+  /* Stats */
+  .stats-bar{grid-template-columns:1fr 1fr;gap:.6rem;}
+  .stat-card{padding:.8rem 1rem;}
+  .stat-value{font-size:1.5rem;}
+  .stat-label{font-size:.6rem;}
+  /* Progress slots — squeeze to fit all on one line */
+  .progress-block{padding:.8rem .8rem;}
+  .pb-slot-name{font-size:.48rem;letter-spacing:0;}
+  /* Cards */
+  .rung-card{padding:.8rem .9rem;}
+  .rung-details{gap:.8rem;}
+  .rung-num{font-size:.58rem;}
+  .rung-actions{gap:5px;}
+  .btn-sm{padding:4px 9px;font-size:.72rem;}
+  /* Leaderboard */
+  .lb-grid{grid-template-columns:1fr 1fr;gap:.6rem;}
+  .lb-card{padding:.8rem .9rem;}
+  .lb-stat-val{font-size:1.1rem;}
+  /* Modals */
+  .modal{padding:1.2rem;border-radius:10px;}
+  .modal-title{font-size:1.3rem;margin-bottom:1rem;}
+  .frow{grid-template-columns:1fr;}
+  /* Win banner */
+  .win-title{font-size:2rem;}
+  .win-amount{font-size:2.6rem;}
+  /* Section title */
+  .section-title{font-size:1.1rem;letter-spacing:2px;}
+}
+@media(max-width:380px){
+  .pb-slot-name{display:none;}
+  .stats-bar{grid-template-columns:1fr 1fr;}
+}
+
+/* ── BET SLIP SCANNER ── */
+.slip-upload-zone{border:2px dashed var(--border);border-radius:8px;padding:1.2rem;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface2);}
+.slip-upload-zone:hover{border-color:var(--gold);background:var(--surface-gold);}
+.slip-upload-zone:active{transform:scale(.98);}
+.slip-uz-icon{font-size:1.5rem;line-height:1;margin-bottom:4px;}
+.slip-uz-title{font-weight:600;font-size:.88rem;color:var(--text);}
+.slip-uz-sub{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.slip-uz-scanning{color:var(--gold);font-family:'DM Mono',monospace;font-size:.78rem;animation:pulse 1.5s infinite;}
+.slip-divider{text-align:center;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);margin:.5rem 0 .8rem;text-transform:uppercase;letter-spacing:.5px;}
+.slip-preview img{max-width:100%;max-height:110px;border-radius:6px;border:1px solid var(--border);margin-top:5px;display:block;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">THEE DEGENERATE IDIOTS BET LADDER</div>
+  <div class="header-actions">
+    <div class="sync-pill"><div class="sync-dot" id="sync-dot"></div><span id="sync-lbl">Live</span></div>
+    <div class="theme-toggle">
+      <button class="theme-btn active" id="theme-dark"  onclick="setTheme('dark')">Dark</button>
+      <button class="theme-btn"        id="theme-dim"   onclick="setTheme('dim')">Dim</button>
+      <button class="theme-btn"        id="theme-light" onclick="setTheme('light')">Light</button>
+    </div>
+    <button class="btn btn-primary" onclick="openAddBetModal()">+ Add Bet</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- SETUP BANNER -->
+  <div class="setup-banner" id="setup-banner">
+    <h3>⚙️ Firebase Setup Required</h3>
+    <p>Open <code>bet-ladder.html</code> and replace the placeholder values in the <code>firebaseConfig</code> block near the top with your real Firebase credentials.<br>
+    Get them from: <strong>Firebase Console → Project Settings → Your Apps → Web App → SDK Setup</strong></p>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-ladder" onclick="switchTab('ladder')">
+      <svg viewBox="0 0 24 24"><line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      <span class="tab-label">Ladder</span>
+    </button>
+    <button class="tab-btn" id="tab-leaderboard" onclick="switchTab('leaderboard')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg>
+      <span class="tab-label">Leaders</span>
+    </button>
+    <button class="tab-btn" id="tab-history" onclick="switchTab('history')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+      <span class="tab-label">History</span>
+    </button>
+    <button class="tab-btn" id="tab-admin" onclick="switchTab('admin')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="tab-label">Admin</span>
+    </button>
+  </div>
+
+  <!-- ═══ TAB: LADDER ═══ -->
+  <div class="tab-panel active" id="panel-ladder">
+
+    <!-- WIN BANNER -->
+    <div class="win-banner" id="win-banner">
+      <div class="win-emoji">🏆</div>
+      <div class="win-title">LADDER COMPLETE!</div>
+      <div class="win-sub" id="win-sub-rungs">All rungs cleared — cash it out!</div>
+      <div class="win-amount" id="win-amount">$0.00</div>
+      <div class="win-actions">
+        <button class="btn btn-green" onclick="startNewLadder()">🔄 Start New Ladder</button>
+        <button class="btn btn-ghost" onclick="dismissWin()">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- PROGRESS + ROTATION -->
+    <div class="progress-block">
+      <div class="pb-header">
+        <div class="pb-label" id="pb-label">Ladder Progress — rungs to win</div>
+        <div class="pb-count"><span id="pb-won">0</span> / <span id="pb-total">—</span></div>
+      </div>
+      <div class="pb-slots" id="pb-slots"></div>
+      <div class="pb-footer">
+        <div>Current Pot: <span id="pb-pot">$0.00</span></div>
+        <div id="pb-next"></div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-label">At Stake</div><div class="stat-value sv-gold" id="stat-pot">$0.00</div></div>
+      <div class="stat-card"><div class="stat-label">All-Time Won</div><div class="stat-value sv-green" id="stat-won">$0.00</div></div>
+      <div class="stat-card"><div class="stat-label">All-Time Lost</div><div class="stat-value sv-red" id="stat-lost">$0.00</div></div>
+      <div class="stat-card"><div class="stat-label">Ladders Won</div><div class="stat-value sv-gold" id="stat-ladders">0</div></div>
+    </div>
+
+    <div class="section-title">ACTIVE LADDER</div>
+    <div id="ladder-container">
+      <div class="empty"><div class="big">⟳</div><p>Connecting to Firestore...</p></div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: LEADERBOARD ═══ -->
+  <div class="tab-panel" id="panel-leaderboard">
+    <div class="section-title">CREW LEADERBOARD</div>
+    <div id="team-record" style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);margin-bottom:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.8rem 1.2rem;display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;">
+      <span>TEAM RECORD</span>
+      <span id="tr-wins" style="color:var(--green);font-weight:700;">0W</span>
+      <span id="tr-losses" style="color:var(--red);font-weight:700;">0L</span>
+      <span id="tr-rate" style="color:var(--text);">0% win rate</span>
+      <span id="tr-net" style="color:var(--muted);">$0.00 net</span>
+    </div>
+    <div id="standings-wrap"></div>
+    <div id="earnings-wrap"></div>
+    <div id="awards-wrap"></div>
+    <div id="stats-tables-wrap"></div>
+    <div class="lb-grid" id="lb-grid">
+      <div class="lb-empty">No bets recorded yet.</div>
+    </div>
+
+    <div class="section-title" style="margin-top:2rem;">PERSONAL STATS</div>
+    <div class="ps-grid" id="ps-grid">
+      <div class="lb-empty">No bets recorded yet.</div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: HISTORY ═══ -->
+  <div class="tab-panel" id="panel-history">
+    <div class="section-title">PAST LADDERS</div>
+    <div class="pl-list" id="pl-list">
+      <div class="lb-empty">No completed ladders yet.</div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: ADMIN ═══ -->
+  <div class="tab-panel" id="panel-admin">
+    <div class="section-title">LADDER CONTROLS</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
+      <p style="font-size:.84rem;color:var(--muted);margin-bottom:1.2rem;line-height:1.6;">These actions affect the whole group.</p>
+      <div style="display:flex;flex-direction:column;gap:.8rem;">
+        <button class="btn btn-green" style="text-align:left;" onclick="startNewLadder()">🚀 Start New Ladder — archive current &amp; reset to $20</button>
+        <button class="btn btn-danger" style="text-align:left;" id="end-ladder-btn" onclick="openEndLadderModal()">⛔ End Ladder — mark as failed &amp; archive</button>
+      </div>
+    </div>
+
+    <div class="section-title">FRIENDS &amp; ROTATION</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
+      <div id="admin-friends-list" style="margin-bottom:1rem;"></div>
+      <div class="af-row">
+        <input type="text" id="admin-new-friend" placeholder="Add a friend..." onkeydown="if(event.key==='Enter')addFriendAdmin()">
+        <button class="btn btn-primary" onclick="addFriendAdmin()">Add</button>
+      </div>
+      <div class="rotation-editor" style="margin-top:1.2rem;">
+        <div class="re-label">🔄 Betting Order</div>
+        <div class="re-list" id="re-list"></div>
+        <div class="re-hint">Use arrows to set rotation order. Saved automatically.</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:2rem;">PUSH NOTIFICATIONS</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
+      <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
+        Get notified when a bet wins, loses, or the ladder completes — even when the app is closed.
+      </p>
+      <div id="notif-status" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:1rem;"></div>
+      <button class="btn btn-ghost" id="notif-btn" onclick="requestNotifPermission()">🔔 Enable Notifications on This Device</button>
+      <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Backend Setup (optional)</div>
+        <p style="font-size:.78rem;color:var(--muted);line-height:1.6;">
+          To send automatic notifications when outcomes are recorded, you'll need to set up Firebase Cloud Functions.
+          The token for this device is saved to Firestore under <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">pushTokens</code> once enabled.
+          <br><br>Until then, notifications will only fire when someone is actively using the app.
+        </p>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:2rem;">AI SETTINGS</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
+      <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
+        Enter your Anthropic API key to enable <b>bet slip scanning</b> for the whole group. Once saved here, anyone can scan their bet slip from any device. Get a key at <b>console.anthropic.com</b>.
+      </p>
+      <div class="fg" style="margin-bottom:.8rem;">
+        <label>Anthropic API Key</label>
+        <input type="password" id="claude-api-key-input" placeholder="sk-ant-api03-..." onblur="saveClaudeKey()">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" onclick="saveClaudeKey()">Save Key</button>
+        <div id="claude-key-status" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ═══════════════ ADD BET MODAL ═══════════════ -->
+<div class="overlay" id="add-bet-modal">
+<div class="modal">
+  <div class="modal-title">ADD A BET</div>
+
+  <!-- SLIP SCANNER -->
+  <div class="fg">
+    <div class="slip-upload-zone" id="slip-zone" onclick="document.getElementById('slip-file').click()">
+      <input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">
+      <div class="slip-uz-icon">📷</div>
+      <div class="slip-uz-title">Scan Bet Slip</div>
+      <div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div>
+    </div>
+    <div id="slip-status" style="font-size:.78rem;min-height:1.1em;margin-top:5px;"></div>
+    <div id="slip-preview" class="slip-preview"></div>
+  </div>
+  <div class="slip-divider">— or fill in manually —</div>
+
+  <div class="fg">
+    <label>Who's Betting?</label>
+    <select id="bet-person"><option value="">Select friend...</option></select>
+  </div>
+  <div class="fg">
+    <label>Bet Type</label>
+    <div class="chips" style="margin-bottom:0;">
+      <button class="chip on" id="btype-straight" onclick="setBetType('straight')">Straight</button>
+      <button class="chip" id="btype-parlay"   onclick="setBetType('parlay')">Parlay</button>
+      <button class="chip" id="btype-freeform" onclick="setBetType('freeform')">Free-form</button>
+    </div>
+  </div>
+
+  <!-- LEGS BUILDER (straight/parlay) -->
+  <div id="legs-section">
+    <div class="legs-builder">
+      <div class="lb-title" id="legs-label">Game / Leg</div>
+      <div id="built-legs"></div>
+      <div class="alf">
+        <div class="alf-title" id="alf-title">+ Link a Game (optional)</div>
+        <div class="chips">
+          <button class="chip on" id="ltype-game-btn" onclick="setLegType('game')">Game</button>
+          <button class="chip" id="ltype-prop-btn" onclick="setLegType('prop')">Player Prop</button>
+        </div>
+        <!-- GAME -->
+        <div id="leg-game-sec">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <input type="date" id="game-date" style="flex:1;font-family:'DM Mono',monospace;font-size:.78rem;" onchange="doSearch(document.getElementById('game-search').value||'')">
+          </div>
+          <div class="chips" id="sport-chips"></div>
+          <div class="gsw">
+            <input type="text" id="game-search" placeholder="Search by team..." autocomplete="off"
+              oninput="debounceSearch(this.value)" onfocus="onSearchFocus()">
+            <div class="gresults" id="game-results"></div>
+          </div>
+          <div class="search-hint" id="search-hint-lbl">Searches ESPN schedule for selected date.</div>
+          <div id="leg-sel-game"></div>
+        </div>
+        <!-- PROP -->
+        <div id="leg-prop-sec" style="display:none;">
+          <div class="frow">
+            <div class="fg" style="margin:0;"><label>Player Name</label><input type="text" id="prop-player" placeholder="e.g. LeBron James"></div>
+            <div class="fg" style="margin:0;"><label>Prop Type</label>
+              <select id="prop-type">
+                <option>Points Over/Under</option><option>Assists Over/Under</option>
+                <option>Rebounds Over/Under</option><option>Passing Yards O/U</option>
+                <option>Rushing Yards O/U</option><option>Receiving Yards O/U</option>
+                <option>Strikeouts O/U</option><option>Hits O/U</option>
+                <option>Goals O/U</option><option>Anytime Touchdown</option>
+                <option>First Touchdown</option><option>Custom Prop</option>
+              </select>
+            </div>
+          </div>
+          <div class="frow" style="margin-top:8px;">
+            <div class="fg" style="margin:0;"><label>Line / Value</label><input type="text" id="prop-line" placeholder="e.g. Over 27.5"></div>
+            <div class="fg" style="margin:0;"><label>Game Context</label><input type="text" id="prop-ctx" placeholder="e.g. vs. Warriors"></div>
+          </div>
+        </div>
+        <div class="fg" style="margin-top:8px;margin-bottom:0;">
+          <label>Pick / Leg Description</label>
+          <input type="text" id="leg-pick" placeholder="e.g. Lakers -5.5, Over 228">
+        </div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="addLeg()">+ Add Leg</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FREE-FORM -->
+  <div id="ff-section" style="display:none;">
+    <div class="fg">
+      <label>Bet Description</label>
+      <input type="text" id="ff-desc" placeholder="e.g. Bears Super Bowl futures">
+    </div>
+  </div>
+
+  <!-- SHARED FIELDS -->
+  <div class="frow">
+    <div class="fg"><label>Wager ($)</label><input type="number" id="bet-amount" placeholder="20.00" min="0" step="0.01"></div>
+    <div class="fg"><label>Odds (e.g. +150, -110)</label><input type="text" id="bet-odds" placeholder="+150"></div>
+  </div>
+  <div class="fg">
+    <label>Status</label>
+    <select id="bet-status">
+      <option value="pending">Pending</option>
+      <option value="active">Active / Live</option>
+    </select>
+  </div>
+  <div class="fg"><label>Notes</label><textarea id="bet-notes" placeholder="Any extra info..."></textarea></div>
+  <div class="mactions">
+    <button class="btn btn-ghost" onclick="closeModal('add-bet-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveBet()">Add to Ladder</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════ OUTCOME MODAL ═══════════════ -->
+<div class="overlay" id="outcome-modal">
+<div class="modal">
+  <div class="modal-title">RECORD OUTCOME</div>
+  <div id="outcome-summary" style="font-size:.88rem;color:var(--muted);margin-bottom:1rem;"></div>
+  <div class="outcome-btns">
+    <button class="ob win"  onclick="recordOutcome('won')">🏆 WIN</button>
+    <button class="ob loss" onclick="recordOutcome('lost')">💀 LOSS</button>
+    <button class="ob push" onclick="recordOutcome('push')">🤝 PUSH</button>
+  </div>
+  <div style="margin-top:1.4rem;">
+    <div class="fg"><label>Actual Payout ($)</label><input type="number" id="outcome-payout" placeholder="0.00" min="0" step="0.01"></div>
+  </div>
+  <div class="mactions"><button class="btn btn-ghost" onclick="closeModal('outcome-modal')">Cancel</button></div>
+</div>
+</div>
+
+<!-- ═══════════════ EDIT MODAL ═══════════════ -->
+<div class="overlay" id="edit-modal">
+<div class="modal">
+  <div class="modal-title">EDIT BET</div>
+  <input type="hidden" id="edit-id">
+  <div class="fg"><label>Who's Betting?</label><select id="edit-person"></select></div>
+  <div class="fg"><label>Description</label><input type="text" id="edit-desc"></div>
+  <div class="frow">
+    <div class="fg"><label>Wager ($)</label><input type="number" id="edit-amount" min="0" step="0.01"></div>
+    <div class="fg"><label>Odds</label><input type="text" id="edit-odds"></div>
+  </div>
+  <div class="fg">
+    <label>Status</label>
+    <select id="edit-status">
+      <option value="pending">Pending</option><option value="active">Active</option>
+      <option value="won">Won</option><option value="lost">Lost</option>
+    </select>
+  </div>
+  <div class="fg"><label>Payout ($)</label><input type="number" id="edit-payout" min="0" step="0.01"></div>
+  <div class="fg"><label>Notes</label><textarea id="edit-notes"></textarea></div>
+  <div class="mactions">
+    <button class="btn btn-ghost" onclick="closeModal('edit-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════ FRIENDS MODAL ═══════════════ -->
+<div class="overlay" id="friends-modal">
+<div class="modal">
+  <div class="modal-title">MANAGE FRIENDS</div>
+  <div id="friends-list" style="margin-bottom:1rem;"></div>
+  <div class="af-row">
+    <input type="text" id="new-friend" placeholder="Friend's name..." onkeydown="if(event.key==='Enter')addFriend()">
+    <button class="btn btn-primary" onclick="addFriend()">Add</button>
+  </div>
+  <!-- ROTATION ORDER EDITOR -->
+  <div class="rotation-editor">
+    <div class="re-label">🔄 Betting Order (drag to reorder)</div>
+    <div class="re-list" id="re-list"></div>
+    <div class="re-hint">Drag names up/down to set the rotation. Saved automatically.</div>
+  </div>
+  <div class="mactions"><button class="btn btn-ghost" onclick="closeModal('friends-modal')">Done</button></div>
+</div>
+</div>
+
+<!-- ═══════════════ START-OVER CONFIRM MODAL ═══════════════ -->
+<div class="overlay" id="newladder-modal">
+<div class="modal" style="max-width:420px;text-align:center;">
+  <div class="modal-title" style="margin-bottom:.5rem;">START NEW LADDER?</div>
+  <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.4rem;line-height:1.6;">
+    This will archive the current ladder and clear all bets so you can start fresh from $20.<br>
+    Your history and leaderboard stats are preserved.
+  </p>
+  <div style="display:flex;gap:12px;justify-content:center;">
+    <button class="btn btn-ghost" onclick="closeModal('newladder-modal')">Cancel</button>
+    <button class="btn btn-green" onclick="confirmNewLadder()">Yes, Start Over</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════ PICK NAME MODAL ═══════════════ -->
+<div class="overlay" id="pick-name-modal">
+<div class="modal" style="max-width:340px;">
+  <div class="modal-title">WHO ARE YOU?</div>
+  <p style="color:var(--muted);font-size:.84rem;margin-bottom:1rem;">Pick your name to add emoji reactions.</p>
+  <div id="pick-name-list"></div>
+  <div class="mactions"><button class="btn btn-ghost" onclick="closeModal('pick-name-modal');if(window._nameResolve){window._nameResolve(null);window._nameResolve=null;}">Cancel</button></div>
+</div>
+</div>
+
+<!-- ═══════════════ END LADDER MODAL ═══════════════ -->
+<div class="overlay" id="end-ladder-modal">
+<div class="modal" style="max-width:440px;">
+  <div class="modal-title">END LADDER</div>
+  <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.2rem;line-height:1.6;">
+    Mark this ladder as failed and archive it. The next person in the rotation will start a new ladder from $20.
+  </p>
+  <div class="fg">
+    <label>Which rung did it fail on?</label>
+    <select id="end-fail-rung"></select>
+  </div>
+  <div class="fg">
+    <label>Notes (optional)</label>
+    <textarea id="end-notes" placeholder="e.g. Lost on the Bears game..." style="min-height:50px;"></textarea>
+  </div>
+  <div class="mactions">
+    <button class="btn btn-ghost" onclick="closeModal('end-ladder-modal')">Cancel</button>
+    <button class="btn btn-danger" onclick="confirmEndLadder()">⛔ End &amp; Archive</button>
+  </div>
+</div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════════════════════════
+function GOAL_RUNGS(){ return Math.max(2, getRotation().length || 6); }
+const START_BET  = 20;
+let winBannerShown = false;
+
+// ════════════════════════════════════════════════════════
+// UI LOCAL STATE
+// ════════════════════════════════════════════════════════
+let outcomeTargetId = null;
+let currentBetType  = 'straight';
+let currentLegType  = 'game';
+let builtLegs       = [];
+let legGame         = null;
+let activeSport     = 'NBA';
+let searchTimer     = null;
+
+const SPORTS = [
+  {label:'NBA',  sport:'basketball', league:'nba'},
+  {label:'NFL',  sport:'football',   league:'nfl'},
+  {label:'MLB',  sport:'baseball',   league:'mlb'},
+  {label:'NHL',  sport:'hockey',     league:'nhl'},
+  {label:'NCAAB',sport:'basketball', league:'mens-college-basketball'},
+  {label:'NCAAF',sport:'football',   league:'college-football'},
+  {label:'MLS',  sport:'soccer',     league:'usa.1'},
+];
+
+// ════════════════════════════════════════════════════════
+// CONFIG CHECK
+// ════════════════════════════════════════════════════════
+setTimeout(() => {
+  if (!window._db) {
+    document.getElementById('setup-banner').classList.add('show');
+    document.getElementById('sync-dot').classList.add('off');
+    document.getElementById('sync-lbl').textContent = 'Offline';
+    document.getElementById('ladder-container').innerHTML =
+      '<div class="empty"><div class="big">⚙</div><p>Add your Firebase config to get started.</p></div>';
+  }
+}, 2000);
+
+// ════════════════════════════════════════════════════════
+// ESPN
+// ════════════════════════════════════════════════════════
+const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
+const PROXIES = [u=>u, u=>`https://corsproxy.io/?${encodeURIComponent(u)}`, u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`];
+async function fetchFallback(url) {
+  for (const p of PROXIES) { try { const r = await fetch(p(url),{signal:AbortSignal.timeout(6000)}); if(r.ok) return r.json(); } catch(e){} }
+  throw new Error('fetch failed');
+}
+function getTodayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+function getSearchDate(){
+  const el = document.getElementById('game-date');
+  if(!el||!el.value) return getTodayStr();
+  return el.value.replace(/-/g,''); // YYYY-MM-DD → YYYYMMDD
+}
+async function getBoard(sport,league,dateStr){
+  const d = dateStr||getTodayStr();
+  // For college basketball, ESPN's groups param can silently omit non-featured games.
+  // Fire two requests in parallel — one with groups (broad D1 filter) and one without —
+  // then merge & deduplicate by event ID so we catch every game.
+  if(league==='mens-college-basketball'){
+    const urls=[
+      `${ESPN}/${sport}/${league}/scoreboard?groups=50&limit=300&dates=${d}`,
+      `${ESPN}/${sport}/${league}/scoreboard?dates=${d}&limit=300`
+    ];
+    const results = await Promise.allSettled(urls.map(u=>fetchFallback(u)));
+    const ev1 = results[0].status==='fulfilled'?(results[0].value.events||[]):[];
+    const ev2 = results[1].status==='fulfilled'?(results[1].value.events||[]):[];
+    const seen = new Set(ev1.map(e=>e.id));
+    return { events:[...ev1,...ev2.filter(e=>!seen.has(e.id))] };
+  }
+  const base = league==='college-football'?`?groups=80&limit=300&dates=${d}`:`?dates=${d}&limit=100`;
+  return fetchFallback(`${ESPN}/${sport}/${league}/scoreboard${base}`);
+}
+async function getLiveScore(espnId,sport,league){
+  try {
+    const d = await fetchFallback(`${ESPN}/${sport}/${league}/summary?event=${espnId}`);
+    const comp = d.header?.competitions?.[0]; if(!comp) return null;
+    const cs = comp.competitors||[];
+    const home = cs.find(c=>c.homeAway==='home'), away = cs.find(c=>c.homeAway==='away');
+    // Extract individual player stats from box score for player prop tracking
+    const playerStats = {};
+    (d.boxscore?.players||[]).forEach(teamData => {
+      (teamData.statistics||[]).forEach(sg => {
+        const names = sg.names||[];
+        (sg.athletes||[]).forEach(a => {
+          const name = (a.athlete?.displayName||'').toLowerCase();
+          if(!name) return;
+          const stats = a.stats||[];
+          const get = k => { const i=names.indexOf(k); return i>=0?(parseFloat(stats[i])||0):null; };
+          playerStats[name] = {
+            pts:get('PTS'), reb:get('REB'), ast:get('AST'), stl:get('STL'), blk:get('BLK'),
+            h:get('H'), hr:get('HR'), k:get('K')??get('SO'), g:get('G')
+          };
+        });
+      });
+    });
+    return { homeTeam:home?.team?.abbreviation||'?', homeScore:home?.score??'—',
+             awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
+             homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
+             homeLocation:home?.team?.location||'', awayLocation:away?.team?.location||'',
+             statusName:comp?.status?.type?.name||'',
+             shortDetail:comp?.status?.type?.shortDetail||comp?.status?.type?.description||'',
+             playerStats };
+  } catch(e){ return null; }
+}
+async function searchGames(q) {
+  const sp = SPORTS.find(s=>s.label===activeSport)||SPORTS[0];
+  try {
+    const d = await getBoard(sp.sport,sp.league,getSearchDate());
+    return (d.events||[]).filter(e=>{
+      if(!q) return true;
+      const n=(e.name||'').toLowerCase(), sh=(e.shortName||'').toLowerCase();
+      const ts=(e.competitions?.[0]?.competitors||[]).map(c=>(c.team?.displayName||'').toLowerCase()).join(' ');
+      return n.includes(q)||sh.includes(q)||ts.includes(q);
+    }).slice(0,10).map(e=>{
+      const comp=e.competitions?.[0], cs=comp?.competitors||[];
+      const home=cs.find(c=>c.homeAway==='home'), away=cs.find(c=>c.homeAway==='away');
+      return { espnId:e.id, sport:sp.sport, league:sp.league, sportLabel:sp.label,
+               name:e.name, shortName:e.shortName,
+               homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
+               awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
+               homeScore:home?.score||'—', awayScore:away?.score||'—',
+               statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'', date:e.date };
+    });
+  } catch(e){ return []; }
+}
+
+// ════════════════════════════════════════════════════════
+// HITTING DETECTION
+// ════════════════════════════════════════════════════════
+// Returns { type:'spread'|'total'|'ml'|'unknown', covering:bool|null, label:string }
+// covering=null means game not started (no indicator)
+// Build a list of name tokens for a team from score data + stored leg game data
+function teamTokens(abbr, fullName, location){
+  const tokens = [];
+  const add = s => { if(s) tokens.push(s.toLowerCase().trim()); };
+  add(abbr);
+  add(fullName);
+  add(location);
+  // Also add each word of the full name (e.g. "Yale Bulldogs" → ["yale","bulldogs"])
+  if(fullName) fullName.split(/\s+/).forEach(w=>{ if(w.length>2) add(w); });
+  if(location) location.split(/\s+/).forEach(w=>{ if(w.length>2) add(w); });
+  return [...new Set(tokens)];
+}
+
+function getBetStatus(pick, s, legGame){
+  if(!s||!pick) return null;
+  const scheduled = s.statusName==='STATUS_SCHEDULED';
+  const p = pick.toLowerCase().trim();
+  const hs = parseInt(s.homeScore)||0;
+  const as = parseInt(s.awayScore)||0;
+  const tot = hs+as;
+
+  // Build rich token lists — pull from both live score response AND stored leg game
+  const hTokens = teamTokens(
+    s.homeTeam, s.homeFullName,
+    legGame?.homeLocation || legGame?.homeFullName
+  );
+  const aTokens = teamTokens(
+    s.awayTeam, s.awayFullName,
+    legGame?.awayLocation || legGame?.awayFullName
+  );
+
+  // Match: pick text contains any token for that team
+  // Use word-boundary style: token must appear as whole word or at start
+  function matchesTeam(tokens){
+    return tokens.some(tok => {
+      if(!tok) return false;
+      // exact substring match (handles abbreviations like "YAL" in "YAL -3.5")
+      const idx = p.indexOf(tok);
+      if(idx === -1) return false;
+      // make sure it's a word boundary (not mid-word)
+      const before = idx === 0 ? '' : p[idx-1];
+      const after  = p[idx+tok.length] || '';
+      const bOk = !before || /[\s\-+\(]/.test(before);
+      const aOk = !after  || /[\s\-+\)\d]/.test(after);
+      return bOk && aOk;
+    });
+  }
+
+  const ph = matchesTeam(hTokens);
+  const pa = matchesTeam(aTokens);
+
+  // ── Total (over/under) — check first so "over" doesn't trip team match ──
+  const ov = p.match(/over[\s]*([\d.]+)/);
+  const un = p.match(/under[\s]*([\d.]+)/);
+  if(ov||un){
+    const line = parseFloat(ov?.[1]||un?.[1])||0;
+    const isOver = !!ov;
+    if(scheduled || !line) return { type:'total', covering:null, label:`${isOver?'O':'U'} ${line||'?'} · ${tot} pts` };
+    const covering = isOver ? tot >= line : tot < line;
+    let label;
+    if(isOver){
+      label = covering
+        ? `✓ ${tot} pts · over ${line}`
+        : `${tot} pts · need ${(line - tot).toFixed(1)} more`;
+    } else {
+      label = covering
+        ? `✓ ${tot} pts · ${(line - tot).toFixed(1)} to bust`
+        : `✗ ${tot} pts · busted by ${(tot - line).toFixed(1)}`;
+    }
+    return { type:'total', covering, line, isOver, label };
+  }
+
+  // ── Spread (team name + number) ──────────────────────
+  if(ph||pa){
+    // Extract spread number — look for -N.N or +N.N pattern
+    const sp = p.match(/([+-][\d]+\.?[\d]*)/);
+    const spread = sp ? parseFloat(sp[1]) : 0;
+    if(scheduled) return { type:'spread', covering:null, label: spread>=0?`+${spread}`:String(spread) };
+    const covering = ph ? (hs+spread)>as : (as+spread)>hs;
+    const margin   = ph ? Math.floor((hs+spread)-as) : Math.floor((as+spread)-hs);
+    const sign = margin>0?'+':'';
+    return { type:'spread', covering, label:`${covering?'✓':'✗'} ${sign}${margin}` };
+  }
+
+  // ── Moneyline (team name only, no spread) ────────────
+  return null;
+}
+
+function isHitting(pick, s, legGame) {
+  if(!s||!pick) return false;
+  if(s.statusName==='STATUS_SCHEDULED') return false;
+  const bs = getBetStatus(pick, s, legGame);
+  if(!bs) return false;
+  if(bs.type==='total') return bs.covering === true;
+  return bs.covering === true;
+}
+
+// ── Player prop detection ────────────────────────────────
+// Parses pick text like "Jaylen Brown Over 25.5 pts" → { playerName, isOver, line, statKey }
+function parsePlayerProp(pick){
+  if(!pick) return null;
+  const p = pick.toLowerCase().trim();
+  const m = p.match(/^(.+?)\s+(over|under)\s+([\d.]+)/);
+  if(!m) return null;
+  const playerName = m[1].trim();
+  const isOver = m[2]==='over';
+  const line = parseFloat(m[3]);
+  const rest = p.slice(p.indexOf(m[3])+m[3].length).trim();
+  let statKey = 'pts';
+  if(/reb|board/.test(rest))          statKey='reb';
+  else if(/ast|assist/.test(rest))    statKey='ast';
+  else if(/stl|steal/.test(rest))     statKey='stl';
+  else if(/blk|block/.test(rest))     statKey='blk';
+  else if(/hr|home\s*run/.test(rest)) statKey='hr';
+  else if(/\bh\b|hit/.test(rest))     statKey='h';
+  else if(/\bk\b|strikeout/.test(rest)) statKey='k';
+  else if(/\bg\b|goal/.test(rest))    statKey='g';
+  return { playerName, isOver, line, statKey };
+}
+// Returns { type:'prop', covering, playerName, statKey, val, line, isOver, label } or null
+function getPlayerPropStatus(leg, s){
+  const prop = parsePlayerProp(leg?.pick||'');
+  if(!prop||!s?.playerStats) return null;
+  const { playerName, isOver, line, statKey } = prop;
+  const all = Object.keys(s.playerStats);
+  // Try exact, then contains, then last name
+  let matched = all.find(n=>n===playerName)
+    || all.find(n=>n.includes(playerName)||playerName.includes(n))
+    || (() => { const last=playerName.split(/\s+/).pop(); return last&&last.length>2?all.find(n=>n.split(/\s+/).pop()===last):null; })();
+  if(!matched) return null;
+  const val = s.playerStats[matched][statKey];
+  if(val===null||val===undefined) return null;
+  const scheduled = s.statusName==='STATUS_SCHEDULED';
+  if(scheduled) return { type:'prop', covering:null, playerName:matched, statKey, val, line, isOver, label:`${isOver?'O':'U'} ${line} ${statKey.toUpperCase()} · ${val}` };
+  const covering = isOver ? val>=line : val<line;
+  const sl = statKey.toUpperCase();
+  const label = isOver
+    ? (covering ? `✓ ${val} ${sl} · over ${line}` : `${val} ${sl} · need ${(line-val).toFixed(1)} more`)
+    : (covering ? `✓ ${val} ${sl} · ${(line-val).toFixed(1)} to bust` : `✗ ${val} ${sl} · busted by ${(val-line).toFixed(1)}`);
+  return { type:'prop', covering, playerName:matched, statKey, val, line, isOver, label };
+}
+
+// ════════════════════════════════════════════════════════
+// SPORT CHIPS & SEARCH
+// ════════════════════════════════════════════════════════
+function buildSportChips(){
+  const el=document.getElementById('sport-chips'); if(!el) return;
+  el.innerHTML=SPORTS.map(s=>`<button class="chip ${s.label===activeSport?'on':''}" onclick="setActiveSport('${s.label}')">${s.label}</button>`).join('');
+}
+function setActiveSport(label){ activeSport=label; buildSportChips(); doSearch(document.getElementById('game-search')?.value||''); }
+function debounceSearch(v){ clearTimeout(searchTimer); searchTimer=setTimeout(()=>doSearch(v),350); }
+function onSearchFocus(){ doSearch(document.getElementById('game-search')?.value||''); }
+async function doSearch(q){
+  const el=document.getElementById('game-results'); if(!el) return;
+  el.style.display='block'; el.innerHTML='<div class="gitem"><span class="sw-loading">Loading...</span></div>';
+  const res=await searchGames(q.toLowerCase().trim());
+  if(!res.length){ el.innerHTML='<div class="gitem"><span class="sw-err">No games on that date — try another sport or date.</span></div>'; return; }
+  el.innerHTML=res.map(g=>{
+    const live=g.statusName==='STATUS_IN_PROGRESS'||g.statusName==='STATUS_HALFTIME', fin=g.statusName==='STATUS_FINAL';
+    const sc=(live||fin)?`${g.awayTeam} ${g.awayScore} — ${g.homeTeam} ${g.homeScore}`:'';
+    const gj=JSON.stringify(g).replace(/</g,'\\u003c').replace(/'/g,'&#39;');
+    return `<div class="gitem" onclick='selectGame(${gj})'>
+      <div class="gi-name">${esc(g.name)}</div>
+      <div class="gi-meta">${g.sportLabel} · ${g.shortDetail||new Date(g.date).toLocaleDateString()}</div>
+      ${sc?`<div class="gi-score">${sc}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function selectGame(g){ legGame=g; document.getElementById('game-search').value=''; document.getElementById('game-results').style.display='none'; renderSelGame(); }
+function renderSelGame(){ const el=document.getElementById('leg-sel-game'); if(!el) return; el.innerHTML=legGame?`<div class="sel-tag">📡 ${esc(legGame.name)}<button onclick="legGame=null;renderSelGame()">✕</button></div>`:''; }
+
+// ════════════════════════════════════════════════════════
+// BET TYPE / LEG TYPE
+// ════════════════════════════════════════════════════════
+function setBetType(t){
+  currentBetType=t;
+  ['straight','parlay','freeform'].forEach(x=>document.getElementById(`btype-${x}`)?.classList.toggle('on',x===t));
+  document.getElementById('legs-section').style.display=t==='freeform'?'none':'block';
+  document.getElementById('ff-section').style.display=t==='freeform'?'block':'none';
+  document.getElementById('legs-label').textContent=t==='parlay'?'Parlay Legs':'Game / Leg';
+  document.getElementById('alf-title').textContent=t==='parlay'?'+ Add a Leg':'+ Link a Game (optional)';
+}
+function setLegType(t){
+  currentLegType=t;
+  document.getElementById('ltype-game-btn').className='chip'+(t==='game'?' on':'');
+  document.getElementById('ltype-prop-btn').className='chip'+(t==='prop'?' prop-on':'');
+  document.getElementById('leg-game-sec').style.display=t==='game'?'block':'none';
+  document.getElementById('leg-prop-sec').style.display=t==='prop'?'block':'none';
+}
+
+// ════════════════════════════════════════════════════════
+// LEGS
+// ════════════════════════════════════════════════════════
+function addLeg(){
+  const pick=document.getElementById('leg-pick')?.value.trim()||'';
+  if(!pick){ alert('Enter a pick/description for this leg.'); return; }
+  const leg={id:uid(),type:currentLegType,pick};
+  if(currentLegType==='game'){ if(legGame) leg.game=legGame; }
+  else {
+    const player=document.getElementById('prop-player')?.value.trim()||'';
+    if(!player){ alert('Enter the player name.'); return; }
+    leg.player=player; leg.propType=document.getElementById('prop-type')?.value||'';
+    leg.line=document.getElementById('prop-line')?.value.trim()||'';
+    leg.gameContext=document.getElementById('prop-ctx')?.value.trim()||'';
+  }
+  builtLegs.push(leg);
+  ['leg-pick','prop-player','prop-line','prop-ctx'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  legGame=null; renderSelGame(); renderBuiltLegs();
+}
+function removeLeg(i){ builtLegs.splice(i,1); renderBuiltLegs(); }
+function renderBuiltLegs(){
+  const el=document.getElementById('built-legs'); if(!el) return;
+  el.innerHTML=builtLegs.map((l,i)=>`
+    <div class="built-leg">
+      <div class="bl-info">
+        <div class="bl-name">${l.type==='prop'?`👤 ${esc(l.player)} — ${esc(l.propType)}`:esc(l.game?.name||'No game linked')}</div>
+        <div class="bl-pick">${esc(l.pick)}${l.line?` · ${esc(l.line)}`:''}${l.gameContext?` · ${esc(l.gameContext)}`:''}</div>
+      </div>
+      <span class="ltag ${l.type==='prop'?'ltag-prop':'ltag-game'}">${l.type==='prop'?'PROP':'GAME'}</span>
+      <button class="btn btn-danger btn-sm" onclick="removeLeg(${i})">✕</button>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// MAIN RENDER (called by Firestore listeners)
+// ════════════════════════════════════════════════════════
+window.render = function(){
+  // Preserve scroll position so Firestore re-renders don't jump the page
+  const savedScroll = window.scrollY;
+  renderProgress();
+  renderStats();
+  renderLadder();
+  renderLeaderboard();
+  renderPersonalStats();
+  renderPastLadders();
+  renderFriendSelect('bet-person');
+  renderFriendSelect('edit-person');
+  renderFriendsList();
+  renderAdminFriends();
+  renderRotationEditor();
+  // End ladder btn lives in admin tab, always visible there
+  const hasBets = (window._state?.bets||[]).length > 0;
+  const btn = document.getElementById('end-ladder-btn');
+  if(btn) btn.disabled = !hasBets;
+  // Restore scroll after DOM update
+  if(savedScroll > 0) window.scrollTo(0, savedScroll);
+};
+
+const fmt = n => '$'+parseFloat(n||0).toFixed(2);
+function calcEst(amount,odds){
+  const a=parseFloat(amount)||0, o=parseInt(odds)||0;
+  if(o>0) return a*(o/100);
+  if(o<0) return a*(100/Math.abs(o));
+  return 0;
+}
+
+// ── Progress + Rotation (combined) ───────────────────
+function renderProgress(){
+  const bets     = window._state?.bets||[];
+  const wonCount = bets.filter(b=>b.status==='won').length;
+  const goal     = GOAL_RUNGS();
+  document.getElementById('pb-won').textContent   = wonCount;
+  const pbTotal = document.getElementById('pb-total');
+  if(pbTotal) pbTotal.textContent = goal;
+  const pbLabel = document.getElementById('pb-label');
+  if(pbLabel) pbLabel.textContent = `Ladder Progress — ${goal} rungs to win`;
+  const winSub = document.getElementById('win-sub-rungs');
+  if(winSub) winSub.textContent = `All ${goal} rungs cleared — cash it out!`;
+
+  const slotsEl = document.getElementById('pb-slots'); if(!slotsEl) return;
+
+  // Build the rotation starting from whoever bet first
+  const rotation = getRotation();
+  let startIdx = 0;
+  if(bets.length > 0 && rotation.length > 0){
+    const found = rotation.findIndex(n => n.toLowerCase() === bets[0].person.toLowerCase());
+    if(found >= 0) startIdx = found;
+  }
+  const slots = Array.from({length: goal}, (_,i) => ({
+    name: rotation.length ? rotation[(startIdx + i) % rotation.length] : `Rung ${i+1}`,
+    bet:  bets[i] || null,
+    isNext: i === bets.length,
+  }));
+
+  slotsEl.innerHTML = slots.map(s => {
+    let barCls = '', nameCls = '';
+    if(s.bet){
+      barCls  = s.bet.status==='won'?'won':s.bet.status==='lost'?'lost':s.bet.status==='active'?'active':'';
+      nameCls = barCls;
+    } else if(s.isNext){
+      nameCls = 'next';
+    }
+    return `<div class="pb-slot">
+      <div class="pb-slot-bar ${barCls}"></div>
+      <div class="pb-slot-name ${nameCls}">${esc(s.name)}</div>
+    </div>`;
+  }).join('');
+
+  // Current Pot: last bet's wager + estimated payout
+  const potEl = document.getElementById('pb-pot');
+  if(potEl){
+    const lastBet = bets[bets.length-1];
+    if(lastBet){
+      const pot = (parseFloat(lastBet.amount)||0) + calcEst(lastBet.amount, lastBet.odds);
+      potEl.textContent = fmt(pot);
+    } else {
+      potEl.textContent = fmt(0);
+    }
+  }
+
+  // Footer: next up label
+  const nextEl = document.getElementById('pb-next');
+  const nextSlot = slots.find(s => s.isNext);
+  if(nextSlot && wonCount < goal)
+    nextEl.innerHTML = `Up next: <span>${esc(nextSlot.name)}</span>`;
+  else if(wonCount >= goal)
+    nextEl.innerHTML = `<span style="color:var(--green)">🎉 Ladder complete!</span>`;
+  else
+    nextEl.textContent = '';
+
+  // Win banner
+  if(wonCount >= goal && !winBannerShown){
+    winBannerShown = true;
+    const totalPayout = bets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
+    document.getElementById('win-amount').textContent = fmt(totalPayout);
+    document.getElementById('win-banner').classList.add('show');
+  }
+}
+
+// ── Stats bar ─────────────────────────────────────────
+function renderStats(){
+  const bets    = window._state?.bets||[];
+  const archive = window._state?.archive||[];
+  const won  = bets.filter(b=>b.status==='won');
+  const lost = bets.filter(b=>b.status==='lost');
+
+  // all-time: current + archive
+  const allBets = [...bets, ...archive.flatMap(a=>a.bets||[])];
+  const atWon   = allBets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
+  const atLost  = allBets.filter(b=>b.status==='lost').reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const pot     = bets.filter(b=>b.status==='active'||b.status==='pending').reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const laddersWon = archive.filter(a=>(a.outcome||{}).result==='won').length;
+
+  document.getElementById('stat-pot').textContent     = fmt(pot);
+  document.getElementById('stat-won').textContent     = fmt(atWon);
+  document.getElementById('stat-lost').textContent    = fmt(atLost);
+  document.getElementById('stat-ladders').textContent = laddersWon;
+}
+
+// ── Ladder rungs ──────────────────────────────────────
+function renderLadder(){
+  const container = document.getElementById('ladder-container');
+  const bets = window._state?.bets||[];
+  if(!bets.length){ container.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>'; return; }
+  container.innerHTML='';
+  // Display newest (highest rung) first
+  const display = [...bets].reverse();
+  display.forEach((bet)=>{
+    const i = bets.indexOf(bet); // original index = rung number
+    const isDone = bet.status==='won' || bet.status==='lost';
+    const dotCls={active:'active',won:'won',lost:'lost',pending:''}[bet.status]||'';
+    const cardCls={active:'c-active',won:'c-won',lost:'c-lost'}[bet.status]||'';
+    const statusLabel={pending:'Pending',active:'Live',won:'Won',lost:'Lost'}[bet.status];
+    const est=calcEst(bet.amount,bet.odds);
+    const legs=bet.legs||[];
+    const isParlay=bet.betType==='parlay';
+    const rung=document.createElement('div');
+    rung.className='ladder-rung';
+
+    // Collapsed view for done bets
+    const collapsedContent = isDone ? `
+      <div class="rung-card ${cardCls}" id="card-${bet.id}" style="cursor:pointer;" onclick="toggleRung('${bet.id}')">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="rung-num" style="margin:0;">Rung ${i+1}</div>
+            <div class="rung-person">${esc(bet.person||'Unknown')}</div>
+            ${bet.desc?`<div style="font-size:.8rem;color:var(--muted);">${esc(bet.desc)}</div>`:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            ${bet.status==='won'&&bet.payout>0?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);">+${fmt(bet.payout)}</span>`:''}
+            ${bet.status==='lost'?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--red);">-${fmt(bet.amount)}</span>`:''}
+            <span class="badge b-${bet.status}">${statusLabel}</span>
+            <span style="color:var(--muted);font-size:.75rem;">▼</span>
+          </div>
+        </div>
+      </div>` : `
+      <div class="rung-card ${cardCls}" id="card-${bet.id}">
+        <div class="rung-num">Rung ${i+1} of ${GOAL_RUNGS()}</div>
+        <div class="rung-header">
+          <div class="rung-person">${esc(bet.person||'Unknown')}</div>
+          <div class="badge-row">
+            ${isParlay?`<span class="badge b-parlay">🔗 Parlay ${legs.length} legs</span>`:''}
+            <span id="hit-badge-${bet.id}"></span>
+            <span class="badge b-${bet.status}">${statusLabel}</span>
+          </div>
+        </div>
+        <div class="rung-details">
+          ${bet.desc?`<div class="det"><span class="det-lbl">Pick</span><span class="det-val">${esc(bet.desc)}</span></div>`:''}
+          <div class="det"><span class="det-lbl">Wager</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
+          ${bet.odds?`<div class="det"><span class="det-lbl">Odds</span><span class="det-val">${esc(bet.odds)}</span></div>`:''}
+          ${bet.status!=='won'&&est>0?`<div class="det"><span class="det-lbl">Est. Payout</span><span class="det-val green">${fmt(est)}</span></div>`:''}
+          ${bet.status==='won'&&bet.payout>0?`<div class="det"><span class="det-lbl">Payout</span><span class="det-val green">${fmt(bet.payout)}</span></div>`:''}
+        </div>
+        ${legs.length?`
+        <div class="legs-wrap">
+          <div class="legs-lbl">${isParlay?'Parlay Legs':'Bet Details'}</div>
+          ${legs.map((leg,li)=>`
+            <div class="leg ${leg.type==='prop'?'lp':''}" id="leg-${bet.id}-${li}">
+              <div class="leg-row">
+                <div>
+                  <div class="leg-name">${leg.type==='prop'?`👤 ${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
+                  <div class="leg-pick">${esc(leg.pick||'')}${leg.line?` · ${esc(leg.line)}`:''}${leg.gameContext?` · ${esc(leg.gameContext)}`:''}</div>
+                  ${leg.type==='prop'?`<div class="prop-note">${esc(leg.propType||'')}</div>`:''}
+                </div>
+                <span class="ltag ${leg.type==='prop'?'ltag-prop':'ltag-game'}">${leg.type==='prop'?'PROP':'GAME'}</span>
+              </div>
+              ${leg.game?`<div id="score-${bet.id}-${li}" class="score-w"><span class="sw-loading">Loading score...</span></div>`:''}
+            </div>`).join('')}
+        </div>`:''}
+        ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
+        <div class="rung-actions">
+          ${bet.status==='pending'?`<button class="btn btn-ghost btn-sm" onclick="setActive('${bet.id}')">▶ Set Live</button>`:''}
+          ${bet.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openOutcomeModal('${bet.id}')">Record Outcome</button>`:''}
+          ${legs.some(l=>l.game)?`<button class="btn btn-ghost btn-sm" onclick="refreshAll('${bet.id}')">↻ Scores</button>`:''}
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')">✏ Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteBet('${bet.id}')">✕</button>
+        </div>
+      </div>`;
+
+    rung.innerHTML=`
+      <div class="rung-line">
+        <div class="rung-dot ${dotCls}"></div>
+        <div class="rung-connector ${bet.status==='won'?'filled':''}"></div>
+      </div>
+      ${isDone ? collapsedContent : collapsedContent}`;
+    container.appendChild(rung);
+    if(!isDone){
+      legs.forEach((leg,li)=>{ if(leg.game) loadScore(bet.id,li,leg); });
+    }
+  });
+}
+
+// Toggle expanded view for done bets
+const _expanded = new Set();
+function toggleRung(id){
+  const bets = window._state?.bets||[];
+  const bet = bets.find(b=>b.id===id); if(!bet) return;
+  const card = document.getElementById(`card-${bet.id}`); if(!card) return;
+  if(_expanded.has(id)){
+    _expanded.delete(id);
+    renderLadder(); // re-render collapsed
+  } else {
+    _expanded.add(id);
+    // Expand inline — replace card content
+    const i = bets.indexOf(bet);
+    const legs = bet.legs||[];
+    const isParlay = bet.betType==='parlay';
+    const est = calcEst(bet.amount, bet.odds);
+    const statusLabel = {pending:'Pending',active:'Live',won:'Won',lost:'Lost'}[bet.status];
+    card.style.cursor='pointer';
+    card.onclick = () => toggleRung(id);
+    card.innerHTML=`
+      <div class="rung-num" style="margin-bottom:6px;">Rung ${i+1} of ${GOAL_RUNGS()} <span style="color:var(--muted);font-size:.7rem;margin-left:6px;">▲ tap to collapse</span></div>
+      <div class="rung-header">
+        <div class="rung-person">${esc(bet.person||'Unknown')}</div>
+        <div class="badge-row">
+          ${isParlay?`<span class="badge b-parlay">🔗 Parlay ${legs.length} legs</span>`:''}
+          <span class="badge b-${bet.status}">${statusLabel}</span>
+        </div>
+      </div>
+      <div class="rung-details">
+        ${bet.desc?`<div class="det"><span class="det-lbl">Pick</span><span class="det-val">${esc(bet.desc)}</span></div>`:''}
+        <div class="det"><span class="det-lbl">Wager</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
+        ${bet.odds?`<div class="det"><span class="det-lbl">Odds</span><span class="det-val">${esc(bet.odds)}</span></div>`:''}
+        ${bet.status==='won'&&bet.payout>0?`<div class="det"><span class="det-lbl">Payout</span><span class="det-val green">${fmt(bet.payout)}</span></div>`:''}
+        ${bet.status==='lost'?`<div class="det"><span class="det-lbl">Lost</span><span class="det-val" style="color:var(--red);">${fmt(bet.amount)}</span></div>`:''}
+      </div>
+      ${legs.length?`
+      <div class="legs-wrap">
+        <div class="legs-lbl">${isParlay?'Parlay Legs':'Bet Details'}</div>
+        ${legs.map(leg=>`
+          <div class="leg ${leg.type==='prop'?'lp':''}">
+            <div class="leg-row">
+              <div>
+                <div class="leg-name">${leg.type==='prop'?`👤 ${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
+                <div class="leg-pick">${esc(leg.pick||'')}${leg.line?` · ${esc(leg.line)}`:''}${leg.gameContext?` · ${esc(leg.gameContext)}`:''}</div>
+              </div>
+              <span class="ltag ${leg.type==='prop'?'ltag-prop':'ltag-game'}">${leg.type==='prop'?'PROP':'GAME'}</span>
+            </div>
+          </div>`).join('')}
+      </div>`:''}
+      ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
+      <div class="rung-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')">✏ Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBet('${bet.id}')">✕</button>
+      </div>`;
+  }
+}
+
+// ── Rotation helper ──────────────────────────────────
+function getRotation(){
+  const saved = window._state?.rotation||[];
+  const friends = (window._state?.friends||[]).map(f=>f.name);
+  if(saved.length) return saved;
+  return friends;
+}
+
+// ── Rotation editor (drag-to-reorder in friends modal) ───
+function renderRotationEditor(){
+  const list = document.getElementById('re-list'); if(!list) return;
+  const rotation = getRotation();
+  if(!rotation.length){ list.innerHTML='<div class="re-hint">Add friends first, then set the order here.</div>'; return; }
+  list.innerHTML = rotation.map((name,i)=>`
+    <div class="re-item">
+      <div class="re-arrows">
+        <button class="re-arrow-btn" onclick="moveRotation(${i},-1)" ${i===0?'disabled':''}>▲</button>
+        <button class="re-arrow-btn" onclick="moveRotation(${i},1)" ${i===rotation.length-1?'disabled':''}>▼</button>
+      </div>
+      <span class="re-pos">${i+1}</span>
+      <span class="re-name">${esc(name)}</span>
+    </div>`).join('');
+}
+async function moveRotation(idx, dir){
+  const rot=[...getRotation()];
+  const newIdx = idx+dir;
+  if(newIdx<0||newIdx>=rot.length) return;
+  [rot[idx],rot[newIdx]]=[rot[newIdx],rot[idx]];
+  await window.db_saveRotation(rot);
+  renderRotationEditor();
+}
+
+// ── Leaderboard ───────────────────────────────────────
+function renderLeaderboard(){
+  const grid = document.getElementById('lb-grid'); if(!grid) return;
+  const allBets = [
+    ...(window._state?.bets||[]),
+    ...(window._state?.archive||[]).flatMap(a=>a.bets||[])
+  ];
+  const friends = window._state?.friends||[];
+  if(!friends.length){ grid.innerHTML='<div class="lb-empty">Add friends to see the leaderboard.</div>'; return; }
+
+  // Build per-person stats
+  const stats = friends.map(f=>{
+    const fb = allBets.filter(b=>b.person===f.name);
+    const won  = fb.filter(b=>b.status==='won');
+    const lost = fb.filter(b=>b.status==='lost');
+    const totalWon  = won.reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
+    const totalLost = lost.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    const net = totalWon - totalLost;
+    const oddsArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0);
+    const avgOdds = oddsArr.length ? Math.round(oddsArr.reduce((s,o)=>s+o,0)/oddsArr.length) : null;
+    return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgOdds };
+  }).filter(s=>s.total>0);
+
+  // Overall team record (all people combined)
+  const teamWins   = stats.reduce((s,p)=>s+p.wins,0);
+  const teamLosses = stats.reduce((s,p)=>s+p.losses,0);
+  const teamNet    = stats.reduce((s,p)=>s+p.net,0);
+  const teamTotal  = teamWins+teamLosses;
+  const teamWR     = teamTotal>0?Math.round((teamWins/teamTotal)*100):0;
+  const teamNetSign= teamNet>=0?'+':'';
+  const trw=document.getElementById('tr-wins'), trl=document.getElementById('tr-losses'), trr=document.getElementById('tr-rate'), trn=document.getElementById('tr-net');
+  if(trw) trw.textContent=`${teamWins}W`;
+  if(trl) trl.textContent=`${teamLosses}L`;
+  if(trr) trr.textContent=`${teamWR}% win rate`;
+  if(trn){ trn.textContent=`${teamNetSign}${fmt(teamNet)} net`; trn.style.color=teamNet>=0?'var(--green)':'var(--red)'; }
+
+  const sw = document.getElementById('standings-wrap');
+  if(!stats.length){
+    grid.innerHTML='<div class="lb-empty">No bets recorded yet.</div>';
+    if(sw) sw.innerHTML='';
+    return;
+  }
+
+  // ── Standings table (sorted by win %, then wins, then net) ──────
+  if(sw){
+    const sorted = [...stats].sort((a,b)=>{
+      const ta=a.wins+a.losses, tb=b.wins+b.losses;
+      const pa=ta?a.wins/ta:0, pb=tb?b.wins/tb:0;
+      return pb-pa || b.wins-a.wins || b.net-a.net;
+    });
+    function styleBadge(avg){
+      if(avg===null) return `<span class="style-badge bal">—</span>`;
+      if(avg>=100)   return `<span class="style-badge agg">Aggressive</span>`;
+      if(avg>=-100)  return `<span class="style-badge bal">Balanced</span>`;
+      if(avg>=-200)  return `<span class="style-badge con">Conservative</span>`;
+      return             `<span class="style-badge chalk-h">Chalk Heavy</span>`;
+    }
+    function fmtOdds(avg){
+      if(avg===null) return `<span class="st-odds">—</span>`;
+      const cls = avg>0?'dog':'chalk';
+      const s   = avg>0?`+${avg}`:String(avg);
+      return `<span class="st-odds ${cls}">${s}</span>`;
+    }
+    sw.innerHTML = `
+      <div class="section-title" style="margin-bottom:.6rem">STANDINGS</div>
+      <div class="standings-wrap">
+        <table class="standings-table">
+          <thead><tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>W</th>
+            <th>L</th>
+            <th>WIN%</th>
+            <th>Net</th>
+            <th>Avg Odds</th>
+            <th class="st-hide-mob">Style</th>
+          </tr></thead>
+          <tbody>${sorted.map((s,i)=>{
+            const rankCls=i===0?'r1':i===1?'r2':i===2?'r3':'';
+            const decided=s.wins+s.losses;
+            const pct=decided?Math.round(s.wins/decided*100):0;
+            const netCls=s.net>0?'pos':s.net<0?'neg':'neu';
+            const netSign=s.net>=0?'+':'';
+            return `<tr>
+              <td><span class="st-rank ${rankCls}">${i+1}</span></td>
+              <td><span class="st-name">${esc(s.name)}</span></td>
+              <td><span class="st-rec" style="color:var(--green);font-weight:700">${s.wins}</span></td>
+              <td><span class="st-rec" style="color:var(--red);font-weight:700">${s.losses}</span></td>
+              <td><span class="st-pct">${pct}%</span></td>
+              <td><span class="st-net ${netCls}">${netSign}${fmt(s.net)}</span></td>
+              <td>${fmtOdds(s.avgOdds)}</td>
+              <td class="st-hide-mob">${styleBadge(s.avgOdds)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Earnings tracker ────────────────────────────────────────────
+  const ew = document.getElementById('earnings-wrap');
+  if(ew){
+    const archive = window._state?.archive||[];
+    // Sum up the final pot from every completed ladder
+    const completedLadders = archive.filter(a=>(a.outcome||{}).result==='won');
+    const totalLadderPot = completedLadders.reduce((sum, a) => {
+      const wonBets = (a.bets||[]).filter(b=>b.status==='won');
+      const last = wonBets[wonBets.length-1];
+      return sum + (parseFloat(last?.amount)||0) + (parseFloat(last?.payout)||0);
+    }, 0);
+    const perPersonShare = totalLadderPot / 6;
+
+    // Per-person losses (all bets across current + archive)
+    const earningsStats = friends.map(f => {
+      const personalLosses = allBets.filter(b=>b.person===f.name&&b.status==='lost').length;
+      const lossDeduction  = personalLosses * 20;
+      const netEarnings    = perPersonShare - lossDeduction;
+      return { name:f.name, share:perPersonShare, losses:personalLosses, lossDeduction, netEarnings };
+    });
+    earningsStats.sort((a,b)=>b.netEarnings-a.netEarnings);
+
+    const laddersWon = completedLadders.length;
+    const shareSign  = perPersonShare>=0?'+':'';
+    ew.innerHTML = `
+      <div class="section-title" style="margin-bottom:.6rem">EARNINGS</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-bottom:.6rem;">
+        ${laddersWon} ladder${laddersWon!==1?'s':''} completed · ${fmt(totalLadderPot)} total pot · ${shareSign}${fmt(perPersonShare)} per person
+      </div>
+      <div class="standings-wrap">
+        <table class="standings-table">
+          <thead><tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Ladder Share</th>
+            <th>Losses</th>
+            <th>Deduction</th>
+            <th>Net Earnings</th>
+          </tr></thead>
+          <tbody>${earningsStats.map((s,i)=>{
+            const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
+            const netCls  = s.netEarnings>0?'pos':s.netEarnings<0?'neg':'neu';
+            const netSign = s.netEarnings>=0?'+':'';
+            return `<tr>
+              <td><span class="st-rank ${rankCls}">${i+1}</span></td>
+              <td><span class="st-name">${esc(s.name)}</span></td>
+              <td><span style="color:var(--green);font-weight:700">${shareSign}${fmt(s.share)}</span></td>
+              <td><span style="color:${s.losses>0?'var(--red)':'var(--muted)'};">${s.losses}</span></td>
+              <td><span style="color:${s.lossDeduction>0?'var(--red)':'var(--muted)'};">${s.lossDeduction>0?'-'+fmt(s.lossDeduction):'—'}</span></td>
+              <td><span class="st-net ${netCls}" style="font-size:.85rem">${netSign}${fmt(s.netEarnings)}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Wrestling Awards ──────────────────────────────────────────────
+  const arw = document.getElementById('awards-wrap');
+  if(arw){
+    const archive = window._state?.archive||[];
+
+    // 1. CM Punk – highest win % (min 2 decided bets to qualify)
+    const cmPunk = [...stats]
+      .filter(s=>s.wins+s.losses>=2)
+      .sort((a,b)=>{
+        const pa=a.wins/(a.wins+a.losses), pb=b.wins/(b.wins+b.losses);
+        return pb-pa || b.wins-a.wins;
+      })[0]||null;
+
+    // 2. Asuka – longest all-time win streak
+    const asukaData = friends.map(f=>{
+      const fb = allBets.filter(b=>b.person===f.name);
+      let max=0, cur=0;
+      for(const b of fb){
+        if(b.status==='won'){cur++;max=Math.max(max,cur);}
+        else if(b.status==='lost') cur=0;
+      }
+      return {name:f.name, streak:max};
+    }).filter(s=>s.streak>0).sort((a,b)=>b.streak-a.streak)[0]||null;
+
+    // 3. Jeff Hardy – highest average odds (wildest bettor)
+    const jeffHardy = [...stats]
+      .filter(s=>s.avgOdds!==null)
+      .sort((a,b)=>b.avgOdds-a.avgOdds)[0]||null;
+
+    // 4. Undertaker – most times killed the ladder (archive outcome.failedPerson)
+    const killMap = {};
+    archive.filter(a=>a.outcome?.result==='lost'&&a.outcome?.failedPerson)
+      .forEach(a=>{ const p=a.outcome.failedPerson; killMap[p]=(killMap[p]||0)+1; });
+    const taker = Object.entries(killMap).sort((a,b)=>b[1]-a[1])[0]||null;
+
+    function aCard(cls,icon,title,sub,name,stat){
+      const body = name
+        ? `<div class="award-champ">${esc(name)}</div>`
+        : `<div class="award-vacant">VACANT</div>`;
+      return `<div class="award-card ${cls}">
+        <div class="award-icon">${icon}</div>
+        <div class="award-title">${title}</div>
+        <div class="award-subtitle">${sub}</div>
+        ${body}
+        <div class="award-stat">${stat}</div>
+      </div>`;
+    }
+
+    arw.innerHTML = `
+      <div class="section-title" style="margin-bottom:.7rem">🏆 CHAMPIONSHIP TITLES</div>
+      <div class="awards-grid">
+        ${aCard('award-gold','🥇','CM Punk Title','"Best in the World"',
+          cmPunk?.name,
+          cmPunk ? `${Math.round(cmPunk.wins/(cmPunk.wins+cmPunk.losses)*100)}% win rate · ${cmPunk.wins}W-${cmPunk.losses}L` : 'No qualifying bets yet'
+        )}
+        ${aCard('award-purple','🔥','Asuka Title','"Undefeated · Unstoppable"',
+          asukaData?.name,
+          asukaData ? `Best streak: ${asukaData.streak} wins in a row` : 'No wins yet'
+        )}
+        ${aCard('award-green','🎲','Jeff Hardy Title','"Living on the Edge"',
+          jeffHardy?.name,
+          jeffHardy ? `Avg odds: ${jeffHardy.avgOdds>0?'+':''}${jeffHardy.avgOdds}` : 'No odds data yet'
+        )}
+        ${aCard('award-dark','☠️','Undertaker Title','"Rest in Peace, Ladder"',
+          taker?.[0]||null,
+          taker ? `${taker[1]} ladder kill${taker[1]!==1?'s':''}` : 'No ladder kills yet'
+        )}
+      </div>`;
+  }
+
+  // ── Rung Deaths + Form Guide ─────────────────────────────────────
+  const stw = document.getElementById('stats-tables-wrap');
+  if(stw){
+    const archive = window._state?.archive||[];
+
+    // Rung death counts (rungs 1–7)
+    const deathsByRung = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
+    archive.filter(a=>a.outcome?.result==='lost'&&a.outcome?.failedOnRung>=1)
+      .forEach(a=>{ const r=a.outcome.failedOnRung; if(r>=1&&r<=7) deathsByRung[r]++; });
+    const maxD = Math.max(...Object.values(deathsByRung), 1);
+    const totalDeaths = Object.values(deathsByRung).reduce((s,v)=>s+v,0);
+
+    const rungRows = [1,2,3,4,5,6,7].map(r=>{
+      const d = deathsByRung[r];
+      const barW = d>0 ? Math.max(Math.round((d/maxD)*100), 10) : 0;
+      const isHot = d>0 && d===maxD;
+      const isWarn = d>0 && !isHot;
+      const countCls = isHot?'rd-count-hot':isWarn?'rd-count-warn':'';
+      return `<tr>
+        <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding-right:.5rem;white-space:nowrap;">Rung ${r}</td>
+        <td style="width:28px;text-align:right;padding-right:.6rem"><span class="${countCls}" style="font-family:'DM Mono',monospace;font-size:.72rem;">${d}</span></td>
+        <td><div class="rd-bar-wrap"><div class="rd-bar${isHot?' hot':''}" style="width:${barW}%"></div></div></td>
+      </tr>`;
+    }).join('');
+
+    // Form guide — last 5 decided bets per person
+    const formRows = friends.map(f=>{
+      const fb = allBets.filter(b=>b.person===f.name&&(b.status==='won'||b.status==='lost'));
+      const decided = fb.slice(-5);
+      const padded  = [...Array(Math.max(0,5-decided.length)).fill(null), ...decided];
+      let streak=0, streakType=null;
+      for(let i=fb.length-1;i>=0;i--){
+        if(!streakType) streakType=fb[i].status;
+        if(fb[i].status===streakType) streak++;
+        else break;
+      }
+      const badges = padded.map(b=>
+        b===null ? `<span class="fbadge fbadge-e">·</span>`
+        : b.status==='won' ? `<span class="fbadge fbadge-w">W</span>`
+        : `<span class="fbadge fbadge-l">L</span>`
+      ).join('');
+      const streakHtml = !streakType ? `<span style="color:var(--muted)">—</span>`
+        : streakType==='won' ? `<span class="form-streak-w">+${streak}W</span>`
+        : `<span class="form-streak-l">-${streak}L</span>`;
+      return `<tr>
+        <td style="padding-right:.7rem"><span class="st-name">${esc(f.name)}</span></td>
+        <td><div class="form-badges">${badges}</div></td>
+        <td style="padding-left:.7rem">${streakHtml}</td>
+      </tr>`;
+    }).join('');
+
+    stw.innerHTML = `
+      <div class="stats-tables-row">
+        <div>
+          <div class="section-title" style="margin-bottom:.6rem">RUNG DEATHS</div>
+          <div class="standings-wrap" style="display:inline-block;min-width:200px;">
+            <table class="standings-table" style="width:auto;">
+              <thead><tr>
+                <th>Rung</th><th style="text-align:right">Deaths</th><th style="min-width:90px"></th>
+              </tr></thead>
+              <tbody>${rungRows}</tbody>
+              <tfoot><tr><td colspan="3" style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);padding:.5rem .85rem;border-top:1px solid var(--border);">${totalDeaths} total · ${archive.length} ladder${archive.length!==1?'s':''} played</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div class="section-title" style="margin-bottom:.6rem">FORM GUIDE <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:0;font-weight:400;text-transform:none">last 5 bets</span></div>
+          <div class="standings-wrap">
+            <table class="standings-table" style="width:100%;">
+              <thead><tr>
+                <th>Name</th><th>Form</th><th>Streak</th>
+              </tr></thead>
+              <tbody>${formRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Sort lb-cards by net profit descending
+  stats.sort((a,b)=>b.net-a.net);
+
+  grid.innerHTML = stats.map((s,i)=>{
+    const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
+    const cardCls = s.net>0?'pos':s.net<0?'neg':'neu';
+    const total   = s.wins+s.losses;
+    const wr      = total>0?Math.round((s.wins/total)*100):0;
+    const netSign = s.net>=0?'+':'';
+    return `
+    <div class="lb-card ${cardCls}">
+      <div class="lb-rank ${rankCls}">#${i+1}</div>
+      <div class="lb-name">${esc(s.name)}</div>
+      <div class="lb-row">
+        <div class="lb-stat"><div class="lb-stat-lbl">Wins</div><div class="lb-stat-val lv-g">${s.wins}</div></div>
+        <div class="lb-stat"><div class="lb-stat-lbl">Losses</div><div class="lb-stat-val lv-r">${s.losses}</div></div>
+        <div class="lb-stat"><div class="lb-stat-lbl">Net</div><div class="lb-stat-val ${s.net>=0?'lv-g':'lv-r'}">${netSign}${fmt(s.net).replace('$','$')}</div></div>
+      </div>
+      <div class="lb-rate">Record: <b>${s.wins}-${s.losses}</b> · Win rate: <b>${wr}%</b> · Net: <b style="color:${s.net>=0?'var(--green)':'var(--red)'}">${netSign}${fmt(s.net)}</b></div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// SCORE LOADING
+// ════════════════════════════════════════════════════════
+// Cache: espnId → {data, ts}. Scores are re-used for 30s before re-fetching.
+const _scoreCache = {};
+
+function applyScoreToEl(el, betId, li, leg, s){
+  if(!el) return;
+  const hw=parseInt(s.homeScore)>parseInt(s.awayScore), aw=!hw&&parseInt(s.awayScore)>parseInt(s.homeScore);
+  const live=s.statusName==='STATUS_IN_PROGRESS'||s.statusName==='STATUS_HALFTIME', fin=s.statusName==='STATUS_FINAL';
+  const sCls=live?'live':fin?'final':'upcoming', sTxt=live?(s.statusName==='STATUS_HALFTIME'?'🟡 HALFTIME':'🔴 LIVE'):fin?'FINAL':'UPCOMING';
+  // Detect player props: explicit type OR pick text matches a player in box score
+  let bs, isProp=false;
+  const propStatus = getPlayerPropStatus(leg, s);
+  if(leg.type==='prop'||propStatus){
+    bs=propStatus; isProp=true;
+  } else {
+    bs=getBetStatus(leg.pick,s,leg.game);
+  }
+  const hit = bs?.covering===true&&(live||fin);
+  el.classList.toggle('sh',hit);
+  document.getElementById(`leg-${betId}-${li}`)?.classList.toggle('lh',hit);
+  let indicatorHtml='';
+  if(bs&&(live||fin)){
+    const indCls=bs.covering===true?'covering':bs.covering===false?'losing':'neutral';
+    indicatorHtml=`<div class="sw-bet-indicator ${indCls}">${bs.label}</div>`;
+  } else if(bs&&!live&&!fin&&(bs.type==='total'||bs.type==='prop')){
+    indicatorHtml=`<div class="sw-bet-indicator neutral">${bs.label}</div>`;
+  }
+  const isTotalBet = bs?.type==='total';
+  const totScore = (parseInt(s.homeScore)||0)+(parseInt(s.awayScore)||0);
+  const totalRowHtml = isTotalBet&&(live||fin) ? `<div class="sw-total-row">Total: <b>${totScore}</b></div>` : '';
+  const propRowHtml = isProp&&bs?.val!=null&&(live||fin)
+    ? `<div class="sw-total-row">${bs.playerName.replace(/\b\w/g,c=>c.toUpperCase())}: <b>${bs.val} ${bs.statKey.toUpperCase()}</b></div>`
+    : '';
+  el.innerHTML=`
+    <div class="sw-teams">
+      <div class="sw-team"><div class="sw-abb">${esc(s.awayTeam)}</div><div class="sw-score ${aw&&(live||fin)?'winning':''}">${s.awayScore}</div></div>
+      <div class="sw-vs">@</div>
+      <div class="sw-team"><div class="sw-abb">${esc(s.homeTeam)}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
+    </div>
+    ${totalRowHtml}${propRowHtml}
+    ${indicatorHtml}
+    <div class="sw-meta">
+      <div class="sw-status ${sCls}">${sTxt}</div>
+      <div class="sw-detail">${esc(s.shortDetail)}</div>
+      <div class="sw-refresh" onclick="refreshOne('${betId}',${li})">↻ refresh</div>
+    </div>`;
+  updateHitBadge(betId);
+}
+
+async function loadScore(betId,li,leg){
+  const g=leg.game;
+  // Apply cached score instantly if fresh enough
+  const cached=_scoreCache[g.espnId];
+  if(cached&&Date.now()-cached.ts<30000){
+    const el=document.getElementById(`score-${betId}-${li}`);
+    applyScoreToEl(el,betId,li,leg,cached.data); return;
+  }
+  const s=await getLiveScore(g.espnId,g.sport,g.league);
+  // Re-query AFTER the async fetch — DOM may have been rebuilt by a Firestore re-render
+  const el=document.getElementById(`score-${betId}-${li}`); if(!el) return;
+  if(!s){ el.innerHTML=`<span class="sw-err">Score unavailable — <span class="sw-refresh" onclick="refreshOne('${betId}',${li})">retry</span></span>`; return; }
+  _scoreCache[g.espnId]={data:s,ts:Date.now()};
+  applyScoreToEl(el,betId,li,leg,s);
+}
+async function refreshOne(betId,li){
+  const bet=(window._state?.bets||[]).find(b=>b.id===betId); if(!bet?.legs?.[li]?.game) return;
+  const el=document.getElementById(`score-${betId}-${li}`); if(el) el.innerHTML='<span class="sw-loading">Refreshing...</span>';
+  delete _scoreCache[bet.legs[li].game?.espnId]; // bust cache so we force a fresh fetch
+  await loadScore(betId,li,bet.legs[li]);
+}
+function refreshAll(betId){
+  const bet=(window._state?.bets||[]).find(b=>b.id===betId); if(!bet?.legs) return;
+  bet.legs.forEach((l,li)=>{ if(l.game){ const el=document.getElementById(`score-${betId}-${li}`); if(el) el.innerHTML='<span class="sw-loading">Refreshing...</span>'; loadScore(betId,li,l); } });
+}
+function updateHitBadge(betId){
+  const bet=(window._state?.bets||[]).find(b=>b.id===betId);
+  if(!bet||bet.status!=='active') return;
+  const gLegs=(bet.legs||[]).filter(l=>l.game);
+  if(!gLegs.length) return;
+  let cnt=0;
+  (bet.legs||[]).forEach((l,li)=>{ if(l.game&&document.getElementById(`score-${betId}-${li}`)?.classList.contains('sh')) cnt++; });
+  const badge=document.getElementById(`hit-badge-${betId}`), card=document.getElementById(`card-${betId}`);
+  if(!badge) return;
+  const tot=gLegs.length, all=cnt===tot&&tot>0;
+  if(all){ badge.innerHTML='<span class="badge b-hitting">✅ Hitting</span>'; card?.classList.add('c-hitting'); }
+  else if(cnt>0&&tot>1){ badge.innerHTML=`<span class="badge b-hitting">${cnt}/${tot} Legs ✅</span>`; card?.classList.remove('c-hitting'); }
+  else { badge.innerHTML=''; card?.classList.remove('c-hitting'); }
+}
+
+// ════════════════════════════════════════════════════════
+// ADD BET
+// ════════════════════════════════════════════════════════
+function openAddBetModal(){
+  builtLegs=[]; legGame=null; currentBetType='straight'; currentLegType='game';
+  ['bet-amount','bet-odds','bet-notes','ff-desc','leg-pick','prop-player','prop-line','prop-ctx'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  document.getElementById('bet-status').value='pending';
+  renderBuiltLegs(); renderSelGame(); setBetType('straight'); setLegType('game'); buildSportChips();
+  renderFriendSelect('bet-person');
+  // Auto-select next person in rotation
+  const nextP = getNextPerson();
+  if(nextP) document.getElementById('bet-person').value = nextP;
+  // Auto-populate wager: roll over from last won bet's payout, otherwise default $20
+  const activeBets = window._state?.bets||[];
+  const lastWon = [...activeBets].filter(b=>b.status==='won').pop();
+  const betAmtEl = document.getElementById('bet-amount');
+  if(betAmtEl) betAmtEl.value = (lastWon && lastWon.payout > 0) ? parseFloat(lastWon.payout).toFixed(2) : '20.00';
+  // Reset slip scanner
+  const slipZone = document.getElementById('slip-zone');
+  if(slipZone) slipZone.innerHTML = `<div class="slip-uz-icon">📷</div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+  const slipSt = document.getElementById('slip-status'); if(slipSt) slipSt.innerHTML='';
+  const slipPr = document.getElementById('slip-preview'); if(slipPr) slipPr.innerHTML='';
+  // Reset date picker to today
+  const dp = document.getElementById('game-date');
+  if(dp){ const t=new Date(); dp.value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
+  document.getElementById('add-bet-modal').classList.add('open');
+  setTimeout(()=>doSearch(''),150);
+}
+async function saveBet(){
+  const person=document.getElementById('bet-person').value;
+  const amount=document.getElementById('bet-amount').value;
+  const odds=document.getElementById('bet-odds').value.trim();
+  const status=document.getElementById('bet-status').value;
+  const notes=document.getElementById('bet-notes').value.trim();
+  if(!person){ alert('Please select who is betting.'); return; }
+  if(!amount||isNaN(amount)){ alert('Please enter a wager amount.'); return; }
+  let desc='', legs=[];
+  if(currentBetType==='freeform'){
+    desc=document.getElementById('ff-desc').value.trim();
+    if(!desc){ alert('Please enter a bet description.'); return; }
+  } else {
+    // Auto-add pending leg if user filled in a pick or linked a game but forgot "+ Add Leg"
+    const pendingPick=document.getElementById('leg-pick')?.value.trim()||'';
+    if(pendingPick||legGame){
+      const leg={id:uid(),type:currentLegType,pick:pendingPick||(legGame?.shortName||'Linked game')};
+      if(currentLegType==='game'&&legGame) leg.game=legGame;
+      builtLegs.push(leg);
+    }
+    if(currentBetType==='parlay'&&builtLegs.length<2){ alert('A parlay needs at least 2 legs.'); return; }
+    legs=[...builtLegs];
+    if(legs.length) desc=legs.map(l=>l.type==='prop'?`${l.player} ${l.line}`:l.pick).join(' + ');
+  }
+  await window.db_addBet({person,amount:parseFloat(amount),odds,desc,status,notes,betType:currentBetType,legs,payout:0});
+  closeModal('add-bet-modal');
+}
+
+// ════════════════════════════════════════════════════════
+// OUTCOME
+// ════════════════════════════════════════════════════════
+function openOutcomeModal(id){
+  outcomeTargetId=id;
+  const bet=(window._state?.bets||[]).find(b=>b.id===id); if(!bet) return;
+  const est=calcEst(bet.amount,bet.odds);
+  document.getElementById('outcome-summary').textContent=`${bet.person} — ${bet.desc||'Bet'} | Wager: ${fmt(bet.amount)} | Est: ${fmt(est)}`;
+  document.getElementById('outcome-payout').value=est>0?est.toFixed(2):'';
+  document.getElementById('outcome-modal').classList.add('open');
+}
+async function recordOutcome(result){
+  if(result==='push'){
+    await window.db_deleteBet(outcomeTargetId);
+    closeModal('outcome-modal');
+    return;
+  }
+  const bets = window._state?.bets||[];
+  const bet  = bets.find(b=>b.id===outcomeTargetId);
+  const upd  = {status:result};
+  if(result==='won') upd.payout=parseFloat(document.getElementById('outcome-payout').value)||0;
+  await window.db_updateBet(outcomeTargetId,upd);
+  if(bet){
+    if(result==='won') maybeNotify(`🏆 ${bet.person} WON!`, `${bet.desc||'Bet'} — Payout: ${fmt(upd.payout)}`);
+    if(result==='lost') maybeNotify(`💀 ${bet.person} lost`, `${bet.desc||'Bet'} — Lost ${fmt(bet.amount)}`);
+  }
+  closeModal('outcome-modal');
+
+  // ── Auto-archive on loss ──────────────────────────────
+  if(result==='lost' && bet){
+    const updatedBets = bets.map(b => b.id===outcomeTargetId ? {...b, status:'lost'} : b);
+    const failIdx     = updatedBets.findIndex(b=>b.id===outcomeTargetId);
+    await window.db_archiveLadder(updatedBets, {
+      result:'lost', failedOnRung: failIdx+1, failedPerson: bet.person||'', notes:''
+    });
+    // Show reset notice in the ladder tab
+    const container = document.getElementById('ladder-container');
+    if(container) container.innerHTML = `
+      <div class="empty">
+        <div style="font-size:2.5rem;margin-bottom:.5rem;">💀</div>
+        <p style="margin-bottom:.3rem;"><b style="color:var(--red);">${esc(bet.person)}</b> lost on Rung ${failIdx+1}</p>
+        <p style="font-size:.82rem;color:var(--muted);">Ladder archived. Next person is up — start fresh at $20.</p>
+      </div>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// EDIT
+// ════════════════════════════════════════════════════════
+function openEditModal(id){
+  const bet=(window._state?.bets||[]).find(b=>b.id===id); if(!bet) return;
+  document.getElementById('edit-id').value=id;
+  renderFriendSelect('edit-person');
+  document.getElementById('edit-person').value=bet.person;
+  document.getElementById('edit-desc').value=bet.desc||'';
+  document.getElementById('edit-amount').value=bet.amount;
+  document.getElementById('edit-odds').value=bet.odds||'';
+  document.getElementById('edit-status').value=bet.status;
+  document.getElementById('edit-payout').value=bet.payout||'';
+  document.getElementById('edit-notes').value=bet.notes||'';
+  document.getElementById('edit-modal').classList.add('open');
+}
+async function saveEdit(){
+  const id=document.getElementById('edit-id').value;
+  await window.db_updateBet(id,{
+    person:document.getElementById('edit-person').value,
+    desc:document.getElementById('edit-desc').value.trim(),
+    amount:parseFloat(document.getElementById('edit-amount').value)||0,
+    odds:document.getElementById('edit-odds').value.trim(),
+    status:document.getElementById('edit-status').value,
+    payout:parseFloat(document.getElementById('edit-payout').value)||0,
+    notes:document.getElementById('edit-notes').value.trim(),
+  });
+  closeModal('edit-modal');
+}
+
+// ════════════════════════════════════════════════════════
+// NEW LADDER
+// ════════════════════════════════════════════════════════
+function startNewLadder(){ document.getElementById('newladder-modal').classList.add('open'); }
+async function confirmNewLadder(){
+  const bets=window._state?.bets||[];
+  if(!bets.length){ closeModal('newladder-modal'); return; }
+  await window.db_archiveLadder(bets, {result:'won', failedOnRung:null});
+  winBannerShown=false;
+  document.getElementById('win-banner').classList.remove('show');
+  closeModal('newladder-modal');
+}
+
+// ── End (failed) Ladder ───────────────────────────────
+function openEndLadderModal(){
+  const bets = window._state?.bets||[];
+  const sel = document.getElementById('end-fail-rung');
+  if(sel){
+    sel.innerHTML = bets.map((b,i)=>`<option value="${i}">${i+1}. ${esc(b.person||'Rung '+(i+1))} — ${esc(b.desc||'Bet')}</option>`).join('');
+    // default to last bet
+    sel.value = String(bets.length-1);
+  }
+  document.getElementById('end-notes').value='';
+  document.getElementById('end-ladder-modal').classList.add('open');
+}
+async function confirmEndLadder(){
+  const bets=window._state?.bets||[];
+  if(!bets.length){ closeModal('end-ladder-modal'); return; }
+  const failIdx = parseInt(document.getElementById('end-fail-rung').value)||0;
+  const notes   = document.getElementById('end-notes').value.trim();
+  const outcome = { result:'lost', failedOnRung: failIdx+1, failedPerson: bets[failIdx]?.person||'', notes };
+  await window.db_archiveLadder(bets, outcome);
+  winBannerShown=false;
+  document.getElementById('win-banner').classList.remove('show');
+  closeModal('end-ladder-modal');
+}
+function dismissWin(){ document.getElementById('win-banner').classList.remove('show'); }
+
+// ════════════════════════════════════════════════════════
+// FRIENDS
+// ════════════════════════════════════════════════════════
+function openFriendsModal(){ renderFriendsList(); document.getElementById('friends-modal').classList.add('open'); }
+function renderAdminFriends(){
+  const el=document.getElementById('admin-friends-list'); if(!el) return;
+  const f=window._state?.friends||[];
+  el.innerHTML=f.length?f.map(fr=>`<div class="friend-row"><div>${esc(fr.name)}</div><button class="btn btn-danger btn-sm" onclick="removeFriend('${fr.id}')">Remove</button></div>`).join('')
+    :'<div style="color:var(--muted);font-size:.84rem;margin-bottom:.5rem;">No friends added yet.</div>';
+}
+async function addFriendAdmin(){
+  const inp=document.getElementById('admin-new-friend'); const name=inp.value.trim(); if(!name) return;
+  if((window._state?.friends||[]).find(f=>f.name.toLowerCase()===name.toLowerCase())){ alert('Already added!'); return; }
+  await window.db_addFriend(name);
+  const newRot=[...getRotation(), name];
+  await window.db_saveRotation(newRot);
+  inp.value='';
+}
+async function addFriend(){
+  const inp=document.getElementById('new-friend'); const name=inp.value.trim(); if(!name) return;
+  if((window._state?.friends||[]).find(f=>f.name.toLowerCase()===name.toLowerCase())){ alert('Already added!'); return; }
+  await window.db_addFriend(name);
+  // Add to rotation too
+  const newRot=[...getRotation(), name];
+  await window.db_saveRotation(newRot);
+  inp.value='';
+  renderRotationEditor();
+}
+async function removeFriend(id){
+  if(!confirm('Remove this friend?')) return;
+  const f=(window._state?.friends||[]).find(f=>f.id===id);
+  await window.db_deleteFriend(id);
+  if(f){
+    const newRot=getRotation().filter(n=>n!==f.name);
+    await window.db_saveRotation(newRot);
+  }
+  renderRotationEditor();
+}
+function renderFriendsList(){
+  const el=document.getElementById('friends-list'); if(!el) return;
+  const f=window._state?.friends||[];
+  el.innerHTML=f.length?f.map(fr=>`<div class="friend-row"><div>${esc(fr.name)}</div><button class="btn btn-danger btn-sm" onclick="removeFriend('${fr.id}')">Remove</button></div>`).join('')
+    :'<div style="color:var(--muted);font-size:.84rem;margin-bottom:.5rem;">No friends added yet.</div>';
+}
+function renderFriendSelect(id){
+  const sel=document.getElementById(id); if(!sel) return;
+  const cur=sel.value, f=window._state?.friends||[];
+  sel.innerHTML='<option value="">Select friend...</option>'+f.map(fr=>`<option value="${esc(fr.name)}" ${fr.name===cur?'selected':''}>${esc(fr.name)}</option>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// PERSONAL STATS
+// ════════════════════════════════════════════════════════
+const _psOpen = new Set();
+function renderPersonalStats(){
+  const grid = document.getElementById('ps-grid'); if(!grid) return;
+  const allBets = [
+    ...(window._state?.bets||[]),
+    ...(window._state?.archive||[]).flatMap(a=>a.bets||[])
+  ];
+  const friends = window._state?.friends||[];
+  if(!friends.length){ grid.innerHTML='<div class="lb-empty">Add friends to see personal stats.</div>'; return; }
+
+  const cards = friends.map(f=>{
+    const fb   = allBets.filter(b=>b.person===f.name);
+    const wins = fb.filter(b=>b.status==='won');
+    const losses = fb.filter(b=>b.status==='lost');
+    if(!fb.length) return null;
+    const isOpen = _psOpen.has(f.name);
+    const betRows = [...fb].reverse().map(b=>{
+      const isW = b.status==='won', isL = b.status==='lost';
+      if(!isW&&!isL) return '';
+      const amt = isW ? `+${fmt(b.payout||0)}` : `-${fmt(b.amount||0)}`;
+      return `<div class="ps-bet">
+        <span class="ps-bet-desc">${esc(b.desc||'Bet')}</span>
+        <span class="ps-bet-amt ${isW?'w':'l'}">${amt}</span>
+      </div>`;
+    }).join('');
+    const st = calcStreaks([...fb].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0)));
+    const streakPills = [];
+    if(st.streak>1&&st.streakType==='won') streakPills.push(`<span class="streak-pill hot">🔥 ${st.streak} win streak</span>`);
+    if(st.streak>1&&st.streakType==='lost') streakPills.push(`<span class="streak-pill cold">❄️ ${st.streak} loss streak</span>`);
+    if(st.maxStreak>1) streakPills.push(`<span class="streak-pill best">Best: ${st.maxStreak}W streak</span>`);
+    if(st.bestOdds) streakPills.push(`<span class="streak-pill best">Best odds: +${st.bestOdds}</span>`);
+    if(st.biggestPayout) streakPills.push(`<span class="streak-pill best">Biggest win: ${fmt(st.biggestPayout.payout)}</span>`);
+    return `<div class="ps-card">
+      <div class="ps-header" onclick="togglePS('${f.name}')">
+        <div>
+          <div class="ps-name">${esc(f.name)}</div>
+          <div class="ps-record"><b class="w">${wins.length}W</b> · <b class="l">${losses.length}L</b></div>
+          ${streakPills.length?`<div class="streak-bar">${streakPills.join('')}</div>`:''}
+        </div>
+        <span class="ps-chevron ${isOpen?'open':''}">▼</span>
+      </div>
+      <div class="ps-body ${isOpen?'open':''}">${betRows||'<div class="lb-empty">No resolved bets yet.</div>'}</div>
+    </div>`;
+  }).filter(Boolean);
+
+  grid.innerHTML = cards.length ? cards.join('') : '<div class="lb-empty">No bets recorded yet.</div>';
+}
+function togglePS(name){
+  if(_psOpen.has(name)) _psOpen.delete(name); else _psOpen.add(name);
+  renderPersonalStats();
+}
+
+// ════════════════════════════════════════════════════════
+// PAST LADDERS
+// ════════════════════════════════════════════════════════
+const _plOpen = new Set();
+function renderPastLadders(){
+  const list = document.getElementById('pl-list'); if(!list) return;
+  const archive = [...(window._state?.archive||[])].reverse(); // newest first
+  if(!archive.length){ list.innerHTML='<div class="lb-empty">No completed ladders yet.</div>'; return; }
+  const total = archive.length;
+  list.innerHTML = archive.map((a,idx)=>{
+    const ladderNum = total - idx; // newest = highest number
+    const outcome   = a.outcome||{result:'won',failedOnRung:null};
+    const isWon     = outcome.result==='won';
+    const bets      = a.bets||[];
+    const date      = a.completedAt?.toDate ? a.completedAt.toDate().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    const outcomeStr = isWon
+      ? `Won all ${bets.filter(b=>b.status==='won').length} rungs 🏆`
+      : `Lost on Rung ${outcome.failedOnRung||'?'}${outcome.failedPerson?' ('+outcome.failedPerson+')':''}`;
+    const isOpen = _plOpen.has(a.id);
+    const betRows = bets.map((b,i)=>{
+      const isW=b.status==='won', isL=b.status==='lost';
+      const amt = isW?`+${fmt(b.payout||0)}`:isL?`-${fmt(b.amount||0)}`:'—';
+      return `<div class="pl-bet">
+        <div class="pl-bet-left">
+          <span class="pl-bet-rung">R${i+1}</span>
+          <span class="pl-bet-person">${esc(b.person||'?')}</span>
+          <span class="pl-bet-desc">${esc(b.desc||'Bet')}</span>
+        </div>
+        <span class="pl-bet-result ${isW?'w':isL?'l':''}">${amt}</span>
+      </div>`;
+    }).join('');
+    return `<div class="pl-row">
+      <div class="pl-header ${isWon?'won':'lost'}" onclick="togglePL('${a.id}')">
+        <div class="pl-left">
+          <div class="pl-num">LADDER #${ladderNum}</div>
+          <div class="pl-info">
+            <div class="pl-outcome ${isWon?'won':'lost'}">${outcomeStr}</div>
+            <div class="pl-date">${date}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="pl-chevron ${isOpen?'open':''}">▼</span>
+          <button class="btn btn-danger btn-sm" style="font-size:.65rem;padding:3px 8px;" onclick="event.stopPropagation();deleteLadder('${a.id}')">✕ Delete</button>
+        </div>
+      </div>
+      <div class="pl-body ${isOpen?'open':''}">${betRows||'<div class="pl-empty">No bets in this ladder.</div>'}</div>
+    </div>`;
+  }).join('');
+}
+function togglePL(id){
+  if(_plOpen.has(id)) _plOpen.delete(id); else _plOpen.add(id);
+  renderPastLadders();
+}
+async function deleteLadder(id){
+  if(!confirm('Delete this ladder? It will be removed from history and stats permanently.')) return;
+  await window.db_deleteLadder(id);
+}
+
+// ════════════════════════════════════════════════════════
+// STREAKS & RECORDS CALCULATOR
+// ════════════════════════════════════════════════════════
+function calcStreaks(bets){
+  // bets should be chronological (oldest first)
+  const resolved = bets.filter(b=>b.status==='won'||b.status==='lost');
+  if(!resolved.length) return {};
+
+  // Current streak
+  let streak=0, streakType=resolved[resolved.length-1].status;
+  for(let i=resolved.length-1;i>=0;i--){
+    if(resolved[i].status===streakType) streak++;
+    else break;
+  }
+
+  // Best odds hit (won bets only)
+  const wonBets = resolved.filter(b=>b.status==='won'&&b.odds);
+  let bestOdds=null, bestOddsBet=null;
+  wonBets.forEach(b=>{
+    const o=parseInt(b.odds)||0;
+    if(o>0&&(bestOdds===null||o>bestOdds)){ bestOdds=o; bestOddsBet=b; }
+  });
+
+  // Biggest payout
+  const biggestPayout = resolved.filter(b=>b.status==='won').reduce((best,b)=>{
+    return (parseFloat(b.payout)||0)>(parseFloat(best?.payout)||0)?b:best;
+  }, null);
+
+  // Longest win streak ever
+  let maxStreak=0, cur=0;
+  resolved.forEach(b=>{ if(b.status==='won'){cur++;maxStreak=Math.max(maxStreak,cur);}else{cur=0;} });
+
+  return { streak, streakType, bestOdds, bestOddsBet, biggestPayout, maxStreak };
+}
+
+// ════════════════════════════════════════════════════════
+// EMOJI REACTIONS
+// ════════════════════════════════════════════════════════
+const REACTION_EMOJIS = ['🔥','💀','😤','🤑','😬','🙏','💪','👀'];
+let _myName = null; // set when user picks their name for reactions
+
+function getMyName(){
+  if(_myName) return _myName;
+  // Try to infer from friends list — prompt once
+  return null;
+}
+
+function renderReactions(betId){
+  const el = document.getElementById(`reactions-${betId}`); if(!el) return;
+  const rxns = window._state.reactions[betId]||{};
+  const me = getMyName();
+
+  const pills = REACTION_EMOJIS.map(emoji=>{
+    const people = rxns[emoji]||[];
+    const count = people.length;
+    const isMine = me && people.includes(me);
+    return `<button class="reaction-btn ${count===0?'rc-zero':''} ${isMine?'reacted':''}"
+      onclick="toggleReaction('${betId}','${emoji}')" title="${people.join(', ')||'Be first!'}">
+      ${emoji}<span class="rc">${count||''}</span>
+    </button>`;
+  }).join('');
+
+  el.innerHTML = pills;
+}
+
+async function toggleReaction(betId, emoji){
+  let me = getMyName();
+  if(!me){
+    // Prompt user to pick their name
+    const friends = (window._state?.friends||[]).map(f=>f.name);
+    if(!friends.length){ alert('Add friends first!'); return; }
+    me = await pickName(friends);
+    if(!me) return;
+    _myName = me;
+    localStorage.setItem('dtladder_myname', me);
+  }
+  await window.db_toggleReaction(betId, emoji, me);
+}
+
+async function pickName(names){
+  return new Promise(resolve=>{
+    const modal = document.getElementById('pick-name-modal');
+    const list  = document.getElementById('pick-name-list');
+    list.innerHTML = names.map(n=>`<button class="btn btn-ghost" style="width:100%;margin-bottom:6px;text-align:left;" onclick="resolveName('${esc(n)}')">${esc(n)}</button>`).join('');
+    modal.classList.add('open');
+    window._nameResolve = resolve;
+  });
+}
+function resolveName(name){
+  _myName = name;
+  localStorage.setItem('dtladder_myname', name);
+  document.getElementById('pick-name-modal').classList.remove('open');
+  if(window._nameResolve){ window._nameResolve(name); window._nameResolve=null; }
+}
+
+// Restore saved name
+(function(){ const n=localStorage.getItem('dtladder_myname'); if(n) _myName=n; })();
+
+// Restore saved Claude API key into admin input
+setTimeout(()=>{
+  const inp = document.getElementById('claude-api-key-input');
+  const st  = document.getElementById('claude-key-status');
+  const k   = getClaudeKey();
+  if(inp && k) inp.value = k;
+  if(st) st.textContent = k ? '✅ Key saved.' : 'No key saved yet.';
+}, 600);
+
+// ════════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS
+// ════════════════════════════════════════════════════════
+async function requestNotifPermission(){
+  const statusEl = document.getElementById('notif-status');
+  const btn = document.getElementById('notif-btn');
+  if(!('Notification' in window)){ if(statusEl) statusEl.textContent='❌ Notifications not supported in this browser.'; return; }
+  const perm = await Notification.requestPermission();
+  if(perm==='granted'){
+    if(statusEl) statusEl.textContent='✅ Notifications enabled on this device.';
+    if(btn) btn.textContent='✅ Notifications Enabled';
+    // ── BACKEND HOOK ──────────────────────────────────────
+    // When you set up Firebase Cloud Messaging, replace this block:
+    //   const messaging = getMessaging(app);
+    //   const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' });
+    //   await window.db_savePushToken(token);
+    // For now we just save a placeholder so the collection exists:
+    await window.db_savePushToken('manual-' + Date.now());
+    // ─────────────────────────────────────────────────────
+  } else {
+    if(statusEl) statusEl.textContent='❌ Permission denied. Enable notifications in your browser settings.';
+  }
+}
+
+// Client-side notification trigger (fires when app is open)
+// Call this after recording a win/loss outcome
+function maybeNotify(title, body){
+  if(Notification.permission!=='granted') return;
+  try{ new Notification(title, { body, icon:'/favicon.ico' }); }catch(e){}
+}
+
+// Check current notif status on load
+setTimeout(()=>{
+  const statusEl = document.getElementById('notif-status');
+  const btn = document.getElementById('notif-btn');
+  if(!statusEl) return;
+  if(!('Notification' in window)){ statusEl.textContent='❌ Not supported in this browser.'; return; }
+  if(Notification.permission==='granted'){ statusEl.textContent='✅ Notifications enabled on this device.'; if(btn) btn.textContent='✅ Notifications Enabled'; }
+  else if(Notification.permission==='denied'){ statusEl.textContent='❌ Blocked — enable in browser settings.'; }
+  else{ statusEl.textContent='🔔 Not yet enabled on this device.'; }
+}, 500);
+
+// ════════════════════════════════════════════════════════
+// THEMES
+// ════════════════════════════════════════════════════════
+function setTheme(name){
+  document.documentElement.setAttribute('data-theme', name);
+  localStorage.setItem('dtladder_theme', name);
+  ['dark','dim','light'].forEach(t=>{
+    document.getElementById(`theme-${t}`)?.classList.toggle('active', t===name);
+  });
+}
+// Restore saved theme on load
+(function(){
+  const saved = localStorage.getItem('dtladder_theme')||'dark';
+  setTheme(saved);
+})();
+
+// ════════════════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════════════════
+function switchTab(name){
+  ['ladder','leaderboard','history','admin'].forEach(t=>{
+    document.getElementById(`tab-${t}`)?.classList.toggle('active', t===name);
+    document.getElementById(`panel-${t}`)?.classList.toggle('active', t===name);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// NEXT PERSON IN ROTATION
+// ════════════════════════════════════════════════════════
+function getNextPerson(){
+  const bets     = window._state?.bets||[];
+  const rotation = getRotation();
+  if(!rotation.length) return '';
+  let startIdx = 0;
+  if(bets.length > 0){
+    const found = rotation.findIndex(n => n.toLowerCase() === bets[0].person.toLowerCase());
+    if(found >= 0) startIdx = found;
+  }
+  return rotation[(startIdx + bets.length) % rotation.length];
+}
+
+// ════════════════════════════════════════════════════════
+// CLAUDE API KEY
+// ════════════════════════════════════════════════════════
+function getClaudeKey(){
+  // Firestore (shared across group) takes priority; fall back to localStorage
+  return window._state?.settings?.claudeApiKey || localStorage.getItem('claude_api_key') || '';
+}
+function saveClaudeKey(){
+  const inp = document.getElementById('claude-api-key-input');
+  const st  = document.getElementById('claude-key-status');
+  if(!inp) return;
+  const k = inp.value.trim();
+  localStorage.setItem('claude_api_key', k);           // local fallback
+  window.db_saveSettings({claudeApiKey: k});            // shared with group
+  if(st) st.textContent = k ? '✅ Key saved for all devices.' : 'Key cleared.';
+}
+
+// ════════════════════════════════════════════════════════
+// BET SLIP SCANNER (Claude Vision)
+// ════════════════════════════════════════════════════════
+async function handleSlipUpload(input){
+  const file = input.files?.[0]; if(!file) return;
+  const zone  = document.getElementById('slip-zone');
+  const st    = document.getElementById('slip-status');
+  const prev  = document.getElementById('slip-preview');
+
+  // Try cached state first; if empty, fetch directly from Firestore (handles cold-start on mobile)
+  let key = getClaudeKey();
+  if(!key && window.db_getSettings){
+    if(zone) zone.innerHTML = `<div class="slip-uz-scanning">⚙ Loading...</div>`;
+    const settings = await window.db_getSettings();
+    key = settings?.claudeApiKey || '';
+    if(key) window._state.settings = {...(window._state.settings||{}), ...settings};
+  }
+  if(!key){
+    if(zone) zone.innerHTML = `<div class="slip-uz-icon">📷</div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+    if(st) st.innerHTML = '<span style="color:var(--red);">⚠️ No API key set — ask your group admin to add it in the Admin tab.</span>';
+    return;
+  }
+
+  // Show scanning state
+  if(zone) zone.innerHTML = `<div class="slip-uz-scanning">⚙ Scanning slip...</div>`;
+  if(st)   st.innerHTML   = '';
+  if(prev) prev.innerHTML = '';
+
+  try {
+    // Convert image to base64
+    const base64 = await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload  = e => res(e.target.result.split(',')[1]);
+      reader.onerror = rej;
+      reader.readAsDataURL(file);
+    });
+    const mediaType = file.type||'image/jpeg';
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: [
+            { type:'image', source:{ type:'base64', media_type:mediaType, data:base64 } },
+            { type:'text', text:`Parse this sports betting slip and return ONLY a JSON object (no explanation, no markdown, just raw JSON):
+{
+  "betType": "straight" or "parlay",
+  "legs": [
+    {
+      "pick": "the exact selection e.g. Chiefs -3.5 or Over 228.5 or LeBron James Over 25.5 pts",
+      "gameName": "Full team names e.g. Kansas City Chiefs vs Buffalo Bills or AFC Bournemouth vs Brentford",
+      "league": "specific league name e.g. nfl, nba, mlb, nhl, ncaab, ncaaf, premier league, mls, la liga, bundesliga, serie a, ligue 1, champions league, europa league",
+      "gameDate": "YYYY-MM-DD date of the game"
+    }
+  ],
+  "wager": 20.00,
+  "odds": "+150",
+  "notes": ""
+}
+Straight bets have 1 leg. Parlays have 2+ legs. Capture every leg. Be specific with the league — distinguish between Premier League and MLS for soccer, NFL and NCAAF for football, etc. Always include league and gameDate for each leg.` }
+          ]
+        }]
+      })
+    });
+
+    if(!resp.ok){
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    const text = data.content?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if(!match) throw new Error('Could not parse response');
+    const parsed = JSON.parse(match[0]);
+
+    // ── Fill in the form ──────────────────────────────────
+    setBetType(parsed.betType==='parlay' ? 'parlay' : 'straight');
+    builtLegs = [];
+    legGame   = null;
+
+    (parsed.legs||[]).forEach(leg => {
+      builtLegs.push({ id:uid(), type:'game', pick: leg.pick||'', _gameName: leg.gameName||'', _sport: leg.sport||'', _league: leg.league||'', _gameDate: leg.gameDate||'' });
+    });
+    renderBuiltLegs();
+
+    if(parsed.wager)  document.getElementById('bet-amount').value = parseFloat(parsed.wager).toFixed(2);
+    if(parsed.odds)   document.getElementById('bet-odds').value   = parsed.odds;
+    // Notes intentionally not pre-filled — user adds their own notes
+
+    // Auto-link ESPN games
+    if(st) st.innerHTML = '<span style="color:var(--muted);">🔍 Linking games on ESPN...</span>';
+    const linkDebug = await autoLinkGames(builtLegs);
+    renderBuiltLegs();
+
+    // Show image preview
+    const url = URL.createObjectURL(file);
+    if(prev) prev.innerHTML = `<img src="${url}" alt="Bet slip">`;
+
+    // Restore zone
+    if(zone) zone.innerHTML = `<div class="slip-uz-icon">✅</div><div class="slip-uz-title">Slip Scanned</div><div class="slip-uz-sub">Tap to scan a different slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+    const linked = builtLegs.filter(l=>l.game).length;
+    const legWord = builtLegs.length!==1?'legs':'leg';
+    let statusHtml = '';
+    if(linked === builtLegs.length && linked > 0)
+      statusHtml = `<span style="color:var(--green);">✅ ${builtLegs.length} ${legWord} extracted &amp; ${linked} game${linked!==1?'s':''} linked — review and hit Add to Ladder.</span>`;
+    else if(linked > 0)
+      statusHtml = `<span style="color:var(--green);">✅ ${builtLegs.length} ${legWord} extracted, ${linked} auto-linked. Link remaining games manually.</span>`;
+    else
+      statusHtml = `<span style="color:var(--gold);">✅ ${builtLegs.length} ${legWord} extracted — link games manually using the search below each leg.</span>`;
+
+    if(st) st.innerHTML = statusHtml;
+
+  } catch(e) {
+    console.error('Slip scan error:', e);
+    if(zone) zone.innerHTML = `<div class="slip-uz-icon">📷</div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Tap to try again</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+    if(st)   st.innerHTML   = `<span style="color:var(--red);">❌ ${esc(e.message)}</span>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// ESPN AUTO-LINK (used after slip scan)
+// ════════════════════════════════════════════════════════
+// Comprehensive league lookup — returns array of {sport,league,label} to try
+const LEAGUE_LOOKUP = [
+  // ── American sports ──────────────────────────────────────
+  { keys:['nfl','national football league'], sport:'football',   league:'nfl',                    label:'NFL' },
+  { keys:['nba','national basketball'],      sport:'basketball', league:'nba',                    label:'NBA' },
+  { keys:['mlb','major league baseball'],    sport:'baseball',   league:'mlb',                    label:'MLB' },
+  { keys:['nhl','national hockey league'],   sport:'hockey',     league:'nhl',                    label:'NHL' },
+  { keys:['ncaab','ncaa basketball','ncaa b','college basketball','mens college basketball',"men's college basketball",'ncaa men','ncaa hoops','college hoops'], sport:'basketball', league:'mens-college-basketball', label:'NCAAB' },
+  { keys:['ncaaf','ncaa football','ncaa f','college football'],  sport:'football',   league:'college-football',       label:'NCAAF' },
+  // ── Soccer ───────────────────────────────────────────────
+  { keys:['premier league','epl','english premier','barclays'], sport:'soccer', league:'eng.1',          label:'EPL' },
+  { keys:['mls','major league soccer'],                         sport:'soccer', league:'usa.1',          label:'MLS' },
+  { keys:['la liga','laliga','spanish'],                         sport:'soccer', league:'esp.1',          label:'La Liga' },
+  { keys:['bundesliga','german'],                                sport:'soccer', league:'ger.1',          label:'Bundesliga' },
+  { keys:['serie a','italian','calcio'],                         sport:'soccer', league:'ita.1',          label:'Serie A' },
+  { keys:['ligue 1','french','ligue1'],                          sport:'soccer', league:'fra.1',          label:'Ligue 1' },
+  { keys:['champions league','ucl','uefa champions'],            sport:'soccer', league:'uefa.champions', label:'UCL' },
+  { keys:['europa league','uel'],                                sport:'soccer', league:'uefa.europa',    label:'Europa' },
+  { keys:['fa cup'],                                             sport:'soccer', league:'eng.fa',         label:'FA Cup' },
+  // fallback: generic soccer tries all common leagues
+  { keys:['soccer','football league'],                           sport:'soccer', league:'eng.1',          label:'EPL', _soccerFallback:true },
+];
+
+// Returns array of ESPN {sport,league,label} candidates to try (most specific first)
+function guessLeagues(leagueStr, gameName){
+  const s = (leagueStr||'').toLowerCase();
+  const g = (gameName||'').toLowerCase();
+  const combined = s+' '+g;
+
+  // Try each entry — collect all matches, dedupe by league code
+  const seen = new Set();
+  const results = [];
+  for(const entry of LEAGUE_LOOKUP){
+    if(entry._soccerFallback) continue; // handle separately
+    if(entry.keys.some(k => combined.includes(k))){
+      const key = entry.sport+'/'+entry.league;
+      if(!seen.has(key)){ seen.add(key); results.push(entry); }
+    }
+  }
+  // If we got a soccer match but it's generic, add all other soccer leagues as fallbacks
+  if(results.some(r=>r.sport==='soccer') && results.length===1){
+    LEAGUE_LOOKUP.filter(e=>e.sport==='soccer'&&!e._soccerFallback&&!seen.has(e.sport+'/'+e.league))
+      .forEach(e=>{ seen.add(e.sport+'/'+e.league); results.push(e); });
+  }
+  // If nothing matched but we can guess from sport keyword
+  if(!results.length){
+    for(const entry of LEAGUE_LOOKUP){
+      if(entry._soccerFallback) continue;
+      if(entry.keys.some(k => s.includes(k.split(' ')[0]))){
+        const key=entry.sport+'/'+entry.league;
+        if(!seen.has(key)){ seen.add(key); results.push(entry); }
+      }
+    }
+  }
+  return results;
+}
+
+function scoreGameMatch(gameName, espnEvent){
+  const q = (gameName||'').toLowerCase();
+  const evName = (espnEvent.name||'').toLowerCase();
+  const cs = espnEvent.competitions?.[0]?.competitors||[];
+  let score = 0;
+  // Split game name into meaningful tokens (skip short words like "vs", "at", "the")
+  const words = q.split(/[\s,@&\.\/]+/).filter(w=>w.length>2&&w!=='vs.'&&w!=='vs');
+  words.forEach(word=>{
+    if(evName.includes(word)) score+=1;
+    cs.forEach(c=>{
+      const tFull=(c.team?.displayName||'').toLowerCase();
+      const tLoc =(c.team?.location||'').toLowerCase();
+      const tAbbr=(c.team?.abbreviation||'').toLowerCase();
+      if(tFull.includes(word)||tLoc.includes(word)) score+=2;
+      if(word===tAbbr) score+=3;
+    });
+  });
+  return score;
+}
+
+// Returns array of debug objects — one per leg that was processed
+async function autoLinkGames(legs){
+  const debugLog = [];
+  for(const leg of legs){
+    const dbg = {
+      gameName: leg._gameName||'',
+      league:   leg._league||leg._sport||'',
+      date:     leg._gameDate||'',
+      candidates: [],
+      searched: 0,
+      bestScore: 0,
+      bestGame: '',
+      linked: false,
+      skipped: false,
+    };
+
+    if(!leg._gameName||leg.game){ dbg.skipped=true; debugLog.push(dbg); continue; }
+
+    const leagueCandidates = guessLeagues(leg._sport||leg._league||'', leg._gameName);
+    dbg.candidates = leagueCandidates.map(c=>c.label);
+
+    // Date candidates: extracted date first, then nearby
+    const baseDateStr = leg._gameDate ? leg._gameDate.replace(/-/g,'') : getTodayStr();
+    const todayStr = getTodayStr();
+    const tom = new Date(); tom.setDate(tom.getDate()+1);
+    const tomorrowStr = `${tom.getFullYear()}${String(tom.getMonth()+1).padStart(2,'0')}${String(tom.getDate()).padStart(2,'0')}`;
+    const yst = new Date(); yst.setDate(yst.getDate()-1);
+    const yestStr = `${yst.getFullYear()}${String(yst.getMonth()+1).padStart(2,'0')}${String(yst.getDate()).padStart(2,'0')}`;
+    const dates = [...new Set([baseDateStr, todayStr, tomorrowStr, yestStr])];
+
+    let bestMatch=null, bestScore=0;
+
+    // ── Pass 1: targeted search when league was identified ────────────────
+    if(leagueCandidates.length){
+      outer: for(const sp of leagueCandidates){
+        for(const dateStr of dates){
+          try{
+            const board = await getBoard(sp.sport, sp.league, dateStr);
+            dbg.searched += (board.events||[]).length;
+            for(const ev of (board.events||[])){
+              const score = scoreGameMatch(leg._gameName, ev);
+              if(score>bestScore){ bestScore=score; bestMatch={ev,sp}; }
+            }
+            if(bestScore>=4) break outer;
+          }catch(e){}
+        }
+      }
+    }
+
+    // ── Pass 2: broad fallback — scan ALL sports when league wasn't
+    //    identified or targeted search found nothing confident.
+    if(bestScore<3){
+      const fallbackDates=[...new Set([baseDateStr,todayStr,tomorrowStr])];
+      for(const dateStr of fallbackDates){
+        const fetches=SPORTS.map(sp=>
+          getBoard(sp.sport,sp.league,dateStr)
+            .then(board=>({board,sp}))
+            .catch(()=>({board:{events:[]},sp}))
+        );
+        const results=await Promise.all(fetches);
+        for(const{board,sp}of results){
+          dbg.searched += (board.events||[]).length;
+          for(const ev of(board.events||[])){
+            const score=scoreGameMatch(leg._gameName,ev);
+            if(score>bestScore){bestScore=score;bestMatch={ev,sp};}
+          }
+        }
+        if(bestScore>=4) break;
+      }
+    }
+
+    dbg.bestScore = bestScore;
+    dbg.bestGame  = bestMatch?.ev?.name||'';
+
+    // Require a strong match: at least one full team name token must match (score >= 3)
+    if(bestMatch && bestScore>=3){
+      dbg.linked = true;
+      const {ev, sp:mSp} = bestMatch;
+      const comp = ev.competitions?.[0];
+      const cs   = comp?.competitors||[];
+      const home = cs.find(c=>c.homeAway==='home'), away=cs.find(c=>c.homeAway==='away');
+      leg.game = {
+        espnId:ev.id, sport:mSp.sport, league:mSp.league, sportLabel:mSp.label,
+        name:ev.name, shortName:ev.shortName,
+        homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
+        awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
+        homeScore:home?.score||'—', awayScore:away?.score||'—',
+        statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'',
+        date:ev.date,
+      };
+    }
+    debugLog.push(dbg);
+  }
+  return debugLog;
+}
+
+// ════════════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════════════
+async function setActive(id){ await window.db_updateBet(id,{status:'active'}); }
+async function deleteBet(id){ if(!confirm('Remove this bet?')) return; await window.db_deleteBet(id); }
+function closeModal(id){ document.getElementById(id)?.classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); }));
+document.addEventListener('click',e=>{ if(!e.target.closest('.gsw')) document.querySelectorAll('.gresults').forEach(r=>r.style.display='none'); });
+function uid(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+}
+</script>
+</body>
+</html>

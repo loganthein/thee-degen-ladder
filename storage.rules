@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow anyone to read and write bet slip photos
+    // (fine for a private group app — add auth later if needed)
+    match /slips/{fileName} {
+      allow read, write: if true;
+    }
+  }
+}

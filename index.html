@@ -102,14 +102,16 @@ window.db_getSettings = async () => {
 window.db_deleteLadder = async id => deleteDoc(doc(db,'archive',id));
 window.db_archiveLadder = async (bets, outcome) => {
   // outcome = { result: 'won'|'lost', failedOnRung: n|null }
+  const result = (outcome||{}).result || 'won';
   await addDoc(archiveCol, { bets, outcome: outcome||{result:'won',failedOnRung:null}, completedAt: serverTimestamp() });
   for (const b of bets) await deleteDoc(doc(db,'bets',b.id));
-  // Advance rotation past whoever bet last, so the next person in sequence starts fresh
+  // On a win, the opener (rung 1) moves to the end — everyone else already climbed.
+  // On a loss, the person who lost moves to the end — they get to sit out a round.
   if(bets.length > 0){
-    const lastBettor = bets[bets.length-1].person;
+    const pivotPerson = result==='won' ? bets[0].person : bets[bets.length-1].person;
     const rot = window._state?.rotation||[];
     if(rot.length > 1){
-      const idx = rot.findIndex(n => n.toLowerCase() === lastBettor.toLowerCase());
+      const idx = rot.findIndex(n => n.toLowerCase() === pivotPerson.toLowerCase());
       if(idx >= 0){
         const newRot = [...rot.slice(idx+1), ...rot.slice(0, idx+1)];
         await setDoc(doc(db,'rotation','order'), { names: newRot });
@@ -295,6 +297,8 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .score-w.sh{border-color:var(--green);background:var(--surface);}
 .sw-teams{display:flex;align-items:center;gap:11px;}
 .sw-team{display:flex;flex-direction:column;align-items:center;min-width:44px;text-align:center;}
+.sw-logo-chip{width:28px;height:28px;border-radius:50%;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin-bottom:4px;overflow:hidden;}
+.sw-logo-chip img{width:20px;height:20px;object-fit:contain;}
 .sw-abb{font-size:.62rem;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;}
 .sw-score{font-family:'Bebas Neue',sans-serif;font-size:1.75rem;line-height:1;color:var(--text);}
 .sw-bet-indicator{font-family:'DM Mono',monospace;font-size:.65rem;margin-top:5px;padding:2px 7px;border-radius:10px;border:1px solid;display:inline-block;}
@@ -329,7 +333,23 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .abc-badge{font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;padding:3px 10px;border-radius:20px;white-space:nowrap;}
 .abc-badge.live{color:var(--red);border:1px solid var(--border-red);background:var(--surface-red);}
 .abc-badge.pending{color:var(--muted);border:1px solid var(--border);background:var(--surface2);}
+/* Split panel: left = live score/pace, right = staked/odds/to-win */
+.abc-body{display:grid;grid-template-columns:1fr 200px;gap:14px;align-items:start;}
+.abc-left .legs-wrap{margin-top:0;}
+.abc-right{display:flex;flex-direction:column;gap:.7rem;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.9rem 1.1rem;}
 .abc-stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.9rem 1.1rem;margin-top:10px;}
+
+/* ── ORDER TOGGLE ── */
+.order-toggle{display:flex;gap:6px;margin-bottom:1rem;}
+.ot-btn{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;}
+.ot-btn:hover{border-color:var(--gold);}
+.ot-btn.active{background:var(--text);color:var(--bg);border-color:var(--text);}
+.ladder-flow{display:flex;flex-direction:column;}
+.ladder-flow #progress-block{order:1;}
+.ladder-flow #active-bet-wrap{order:2;}
+.ladder-flow #bet-history-wrap{order:3;}
+.ladder-flow.order-live #progress-block{order:2;}
+.ladder-flow.order-live #active-bet-wrap{order:1;}
 
 /* ── LIKELIHOOD TO HIT ── */
 .likelihood-block{margin-top:14px;}
@@ -668,6 +688,8 @@ textarea{resize:vertical;min-height:56px;}
   .rung-actions{gap:5px;}
   .btn-sm{padding:4px 9px;font-size:.72rem;}
   .abc-stats-row{grid-template-columns:1fr;gap:.5rem;}
+  .abc-body{grid-template-columns:1fr;}
+  .abc-right{flex-direction:row;flex-wrap:wrap;}
   /* Leaderboard */
   .lb-grid{grid-template-columns:1fr 1fr;gap:.6rem;}
   .lb-card{padding:.8rem .9rem;}
@@ -766,21 +788,31 @@ textarea{resize:vertical;min-height:56px;}
       <div class="stat-card"><div class="stat-label">Ladders Won</div><div class="stat-value sv-gold" id="stat-ladders">0</div></div>
     </div>
 
-    <!-- PROGRESS + ROTATION (horizontal avatar-bubble ladder) -->
-    <div class="progress-block">
-      <div class="pb-header">
-        <div class="pb-label" id="pb-label">Ladder Progress — rungs to win</div>
-        <div class="pb-pot-inline">Pot now <span id="pb-pot">$0.00</span></div>
-      </div>
-      <div class="pb-slots" id="pb-slots"></div>
-      <div class="pb-footer">
-        <div id="pb-next"></div>
-        <div class="pb-count"><span id="pb-won">0</span> / <span id="pb-total">—</span> won</div>
-      </div>
+    <!-- ORDER TOGGLE -->
+    <div class="order-toggle" id="order-toggle">
+      <button class="ot-btn" data-mode="ladder" onclick="setOrderMode('ladder')">Ladder ↑</button>
+      <button class="ot-btn" data-mode="live" onclick="setOrderMode('live')">Live Bet ↑</button>
     </div>
 
-    <div id="ladder-container">
-      <div class="empty"><div class="big">⟳</div><p>Connecting to Firestore...</p></div>
+    <div class="ladder-flow" id="ladder-flow">
+      <!-- PROGRESS + ROTATION (horizontal avatar-bubble ladder) -->
+      <div class="progress-block" id="progress-block">
+        <div class="pb-header">
+          <div class="pb-label" id="pb-label">Ladder Progress — rungs to win</div>
+          <div class="pb-pot-inline">Pot now <span id="pb-pot">$0.00</span></div>
+        </div>
+        <div class="pb-slots" id="pb-slots"></div>
+        <div class="pb-footer">
+          <div id="pb-next"></div>
+          <div class="pb-count"><span id="pb-won">0</span> / <span id="pb-total">—</span> won</div>
+        </div>
+      </div>
+
+      <div id="active-bet-wrap">
+        <div class="empty"><div class="big">⟳</div><p>Connecting to Firestore...</p></div>
+      </div>
+
+      <div id="bet-history-wrap"></div>
     </div>
   </div>
 
@@ -1136,7 +1168,7 @@ setTimeout(() => {
     document.getElementById('setup-banner').classList.add('show');
     document.getElementById('sync-dot').classList.add('off');
     document.getElementById('sync-lbl').textContent = 'Offline';
-    document.getElementById('ladder-container').innerHTML =
+    document.getElementById('active-bet-wrap').innerHTML =
       '<div class="empty"><div class="big">⚙</div><p>Add your Firebase config to get started.</p></div>';
   }
 }, 2000);
@@ -1205,6 +1237,7 @@ async function getLiveScore(espnId,sport,league){
              awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
              homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
              homeLocation:home?.team?.location||'', awayLocation:away?.team?.location||'',
+             homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
              statusName:comp?.status?.type?.name||'',
              shortDetail:comp?.status?.type?.shortDetail||comp?.status?.type?.description||'',
              playerStats };
@@ -1690,12 +1723,13 @@ function activeBetCardHTML(bet, i){
         </div>
       </div>
 
-      ${legsBlockHTML(bet)}
-
-      <div class="abc-stats-row">
-        <div class="det"><span class="det-lbl">Staked</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
-        <div class="det"><span class="det-lbl">Odds</span><span class="det-val">${bet.odds?esc(bet.odds):'—'}</span></div>
-        <div class="det"><span class="det-lbl">To Win</span><span class="det-val green">${est>0?fmt(est):'—'}</span></div>
+      <div class="abc-body">
+        <div class="abc-left">${legsBlockHTML(bet)}</div>
+        <div class="abc-right">
+          <div class="det"><span class="det-lbl">Staked</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
+          <div class="det"><span class="det-lbl">Odds</span><span class="det-val">${bet.odds?esc(bet.odds):'—'}</span></div>
+          <div class="det"><span class="det-lbl">To Win</span><span class="det-val green">${est>0?fmt(est):'—'}</span></div>
+        </div>
       </div>
 
       ${renderLikelihoodBar(bet)}
@@ -1738,26 +1772,25 @@ function historyRowHTML(bet, i){
 }
 
 function renderLadder(){
-  const container = document.getElementById('ladder-container');
+  const activeWrap  = document.getElementById('active-bet-wrap');
+  const historyWrap = document.getElementById('bet-history-wrap');
   const bets = window._state?.bets||[];
-  if(!bets.length){ container.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>'; return; }
+  if(!bets.length){
+    activeWrap.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>';
+    historyWrap.innerHTML='';
+    return;
+  }
 
   const openBets = bets.map((b,i)=>({b,i})).filter(x=>x.b.status==='pending'||x.b.status==='active');
   const doneBets = bets.map((b,i)=>({b,i})).filter(x=>x.b.status==='won'||x.b.status==='lost').reverse(); // newest first
 
-  let html = '';
-  if(openBets.length){
-    // Most recent open bet is "current"; render newest-first so it's always on top
-    [...openBets].reverse().forEach(({b,i})=>{ html += activeBetCardHTML(b,i); });
-  } else {
-    html += `<div class="empty"><div class="big">✓</div><p>No active bet right now. Hit + Add Bet to keep the ladder climbing.</p></div>`;
-  }
-  if(doneBets.length){
-    html += `<div class="section-title" style="margin-top:1.5rem;">HISTORY</div><div class="bet-history">`;
-    doneBets.forEach(({b,i})=>{ html += historyRowHTML(b,i); });
-    html += `</div>`;
-  }
-  container.innerHTML = html;
+  activeWrap.innerHTML = openBets.length
+    ? [...openBets].reverse().map(({b,i})=>activeBetCardHTML(b,i)).join('') // most recent open bet on top
+    : `<div class="empty"><div class="big">✓</div><p>No active bet right now. Hit + Add Bet to keep the ladder climbing.</p></div>`;
+
+  historyWrap.innerHTML = doneBets.length
+    ? `<div class="section-title" style="margin-top:1.5rem;">HISTORY</div><div class="bet-history">${doneBets.map(({b,i})=>historyRowHTML(b,i)).join('')}</div>`
+    : '';
 
   openBets.forEach(({b})=>{
     (b.legs||[]).forEach((leg,li)=>{ if(leg.game) loadScore(b.id,li,leg); });
@@ -2186,6 +2219,17 @@ function renderLeaderboard(){
 // Cache: espnId → {data, ts}. Scores are re-used for 30s before re-fetching.
 const _scoreCache = {};
 
+// College teams share one shared logo set under the generic "ncaa" bucket; pro leagues use their own league slug.
+function espnLogoUrl(league, teamId){
+  if(!teamId) return '';
+  const bucket = /college|ncaa/.test(league||'') ? 'ncaa' : league;
+  return `https://a.espncdn.com/i/teamlogos/${bucket}/500/${teamId}.png`;
+}
+function espnLogoChip(league, teamId){
+  const url = espnLogoUrl(league, teamId);
+  return url ? `<div class="sw-logo-chip"><img src="${url}" alt="" onerror="this.parentElement.remove()"></div>` : '';
+}
+
 function applyScoreToEl(el, betId, li, leg, s){
   if(!el) return;
   const hw=parseInt(s.homeScore)>parseInt(s.awayScore), aw=!hw&&parseInt(s.awayScore)>parseInt(s.homeScore);
@@ -2217,9 +2261,9 @@ function applyScoreToEl(el, betId, li, leg, s){
     : '';
   el.innerHTML=`
     <div class="sw-teams">
-      <div class="sw-team"><div class="sw-abb">${esc(s.awayTeam)}</div><div class="sw-score ${aw&&(live||fin)?'winning':''}">${s.awayScore}</div></div>
+      <div class="sw-team">${espnLogoChip(leg.game?.league,s.awayTeamId)}<div class="sw-abb">${esc(s.awayTeam)}</div><div class="sw-score ${aw&&(live||fin)?'winning':''}">${s.awayScore}</div></div>
       <div class="sw-vs">@</div>
-      <div class="sw-team"><div class="sw-abb">${esc(s.homeTeam)}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
+      <div class="sw-team">${espnLogoChip(leg.game?.league,s.homeTeamId)}<div class="sw-abb">${esc(s.homeTeam)}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
     </div>
     ${totalRowHtml}${propRowHtml}
     ${indicatorHtml}
@@ -2257,6 +2301,18 @@ function refreshAll(betId){
   const bet=(window._state?.bets||[]).find(b=>b.id===betId); if(!bet?.legs) return;
   bet.legs.forEach((l,li)=>{ if(l.game){ const el=document.getElementById(`score-${betId}-${li}`); if(el) el.innerHTML='<span class="sw-loading">Refreshing...</span>'; loadScore(betId,li,l); } });
 }
+// Silently re-fetch scores for whatever bet is currently live, every 60s.
+// No-op (and effectively stops) once that bet is no longer 'active'.
+setInterval(()=>{
+  (window._state?.bets||[]).forEach(b=>{
+    if(b.status!=='active') return;
+    (b.legs||[]).forEach((leg,li)=>{
+      if(!leg.game) return;
+      delete _scoreCache[leg.game.espnId];
+      loadScore(b.id,li,leg);
+    });
+  });
+}, 60000);
 function updateHitBadge(betId){
   const bet=(window._state?.bets||[]).find(b=>b.id===betId);
   if(!bet||bet.status!=='active') return;
@@ -2325,6 +2381,7 @@ async function saveBet(){
     if(legs.length) desc=legs.map(l=>l.type==='prop'?`${l.player} ${l.line}`:l.pick).join(' + ');
   }
   await window.db_addBet({person,amount:parseFloat(amount),odds,desc,status,notes,betType:currentBetType,legs,payout:0});
+  maybeNotify(`🎲 ${person} placed a bet`, `${desc||'Bet'}${odds?` at ${odds}`:''} (${fmt(amount)})`);
   closeModal('add-bet-modal');
 }
 
@@ -2351,8 +2408,21 @@ async function recordOutcome(result){
   if(result==='won') upd.payout=parseFloat(document.getElementById('outcome-payout').value)||0;
   await window.db_updateBet(outcomeTargetId,upd);
   if(bet){
-    if(result==='won') maybeNotify(`🏆 ${bet.person} WON!`, `${bet.desc||'Bet'} — Payout: ${fmt(upd.payout)}`);
-    if(result==='lost') maybeNotify(`💀 ${bet.person} lost`, `${bet.desc||'Bet'} — Lost ${fmt(bet.amount)}`);
+    if(result==='won'){
+      const rungIdx  = bets.indexOf(bet);
+      const wonCount = bets.filter(b=>b.status==='won').length + 1; // include this win
+      if(wonCount >= GOAL_RUNGS()){
+        const totalPayout = bets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0) + upd.payout;
+        maybeNotify('🏆 LADDER COMPLETE!', `${bet.person} sealed it with ${bet.desc||'the final bet'}. ${fmt(totalPayout)} in the pot! Cash it out! 💰`);
+      } else {
+        const rotation = getRotation();
+        const idx = rotation.findIndex(n=>n.toLowerCase()===bet.person.toLowerCase());
+        const nextPerson = rotation.length ? rotation[(idx+1+rotation.length)%rotation.length] : '';
+        maybeNotify(`✅ ${bet.person} won rung ${rungIdx+1}!`,
+          `${bet.desc||'Bet'} hit 🔥${nextPerson?` ${nextPerson} is up ${fmt(upd.payout)} to bet — keep it rolling`:` Payout: ${fmt(upd.payout)}`}`);
+      }
+    }
+    if(result==='lost') maybeNotify(`❌ ${bet.person} lost`, `${bet.desc||'Bet'} didn't land. Ladder resets from $20.`);
   }
   closeModal('outcome-modal');
 
@@ -2364,13 +2434,14 @@ async function recordOutcome(result){
       result:'lost', failedOnRung: failIdx+1, failedPerson: bet.person||'', notes:''
     });
     // Show reset notice in the ladder tab
-    const container = document.getElementById('ladder-container');
+    const container = document.getElementById('active-bet-wrap');
     if(container) container.innerHTML = `
       <div class="empty">
         <div style="font-size:2.5rem;margin-bottom:.5rem;">💀</div>
         <p style="margin-bottom:.3rem;"><b style="color:var(--red);">${esc(bet.person)}</b> lost on Rung ${failIdx+1}</p>
         <p style="font-size:.82rem;color:var(--muted);">Ladder archived. Next person is up — start fresh at $20.</p>
       </div>`;
+    const hw = document.getElementById('bet-history-wrap'); if(hw) hw.innerHTML='';
   }
 }
 
@@ -2766,9 +2837,23 @@ function setTheme(name){
 }
 // Restore saved theme on load
 (function(){
-  const saved = localStorage.getItem('dtladder_theme')||'dark';
+  const saved = localStorage.getItem('dtladder_theme')||'light';
   setTheme(saved);
 })();
+
+// ════════════════════════════════════════════════════════
+// LADDER TAB ORDER (Ladder-first vs Live-Bet-first)
+// ════════════════════════════════════════════════════════
+function setOrderMode(mode){
+  localStorage.setItem('dtladder_order', mode);
+  applyOrderMode();
+}
+function applyOrderMode(){
+  const mode = localStorage.getItem('dtladder_order')||'ladder';
+  document.getElementById('ladder-flow')?.classList.toggle('order-live', mode==='live');
+  document.querySelectorAll('.ot-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+}
+applyOrderMode();
 
 // ════════════════════════════════════════════════════════
 // TABS

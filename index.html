@@ -130,6 +130,7 @@ window.db_archiveLadder = async (bets, outcome) => {
   --surface-green:#0c1e13;--border-green:#1a3d2a;
   --surface-red:#1e0c0c;--border-red:#3d1a1a;
   --surface-purple:#1a0a2a;--border-purple:#3a1a5a;
+  --next:#4a5a80;
 }
 [data-theme="dim"]{
   --bg:#111318;--surface:#1c1f26;--surface2:#242830;--border:#333844;
@@ -141,6 +142,7 @@ window.db_archiveLadder = async (bets, outcome) => {
   --surface-green:#0e2418;--border-green:#1a3d2a;
   --surface-red:#231010;--border-red:#3d1a1a;
   --surface-purple:#1e0e30;--border-purple:#3a1a5a;
+  --next:#4a5a80;
 }
 [data-theme="light"]{
   --bg:#f5f5f7;--surface:#ffffff;--surface2:#f0f0f2;--border:#e0e0e5;
@@ -152,6 +154,7 @@ window.db_archiveLadder = async (bets, outcome) => {
   --surface-green:#e8f8ef;--border-green:#1a9e4a;
   --surface-red:#fde8e8;--border-red:#d93025;
   --surface-purple:#f3e8ff;--border-purple:#9b59b6;
+  --next:#3d4d70;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
@@ -202,47 +205,50 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .win-amount{font-family:'Bebas Neue',sans-serif;font-size:4rem;color:var(--gold);letter-spacing:2px;line-height:1;margin-bottom:1.2rem;}
 .win-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
 
-/* ── PROGRESS + ROTATION (combined) ── */
+/* ── PROGRESS + ROTATION (horizontal avatar-bubble ladder) ── */
 .progress-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.4rem;margin-bottom:1.5rem;}
-.pb-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.pb-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:6px;}
 .pb-label{font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
-.pb-count{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px;color:var(--gold);}
-/* Named slot bubbles replace the plain bar */
-.pb-slots{display:flex;gap:3px;flex-wrap:nowrap;width:100%;}
-.pb-slot{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden;}
-.pb-slot-bar{width:100%;height:6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);transition:all .35s;}
-.pb-slot-bar.won{background:var(--green);border-color:var(--green);box-shadow:0 0 5px rgba(62,207,110,.3);}
-.pb-slot-bar.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 5px rgba(245,200,66,.4);}
-.pb-slot-bar.lost{background:var(--red);border-color:var(--red);}
-.pb-slot-name{font-family:'DM Mono',monospace;font-size:.58rem;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:color .3s;}
-.pb-slot-name.won{color:var(--green);}
-.pb-slot-name.active{color:var(--gold);}
-.pb-slot-name.lost{color:var(--red);}
-.pb-slot-name.next{color:#8ab;}
-.pb-footer{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);margin-top:8px;}
+.pb-pot-inline{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);}
+.pb-pot-inline span,.pb-pot-inline #pb-pot{color:var(--gold);font-weight:700;}
+.pb-count{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);}
+.pb-count span{color:var(--gold);font-weight:700;}
+/* Horizontal bubble row */
+.pb-slots{display:flex;align-items:flex-start;gap:0;overflow-x:auto;overflow-y:hidden;padding:4px 2px 10px;}
+.pb-connector{flex:1 0 14px;min-width:14px;height:2px;background:var(--border);margin-top:29px;transition:background .3s;}
+.pb-connector.filled{background:var(--green);}
+.bubble-wrap{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:0;padding:8px 10px;border-radius:12px;border:1px solid transparent;min-width:78px;transition:all .25s;}
+.bubble-wrap.bc-won{border-color:var(--border-green);background:var(--surface-green);}
+.bubble-wrap.bc-lost{border-color:var(--border-red);background:var(--surface-red);}
+.bubble-wrap.bc-active{border:2px solid var(--gold);background:var(--surface-gold);box-shadow:0 0 0 1px rgba(245,200,66,.15),0 0 16px rgba(245,200,66,.15);padding:10px 14px;}
+.bubble-wrap.bc-next{border-color:var(--text);}
+.bubble-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;color:#fff;flex-shrink:0;transition:all .25s;}
+.bubble-wrap.bc-active .bubble-avatar{width:56px;height:56px;font-size:.95rem;}
+.ba-won{background:var(--green);}
+.ba-active{background:var(--gold);color:#1a1400;}
+.ba-lost{background:var(--red);}
+.ba-pending{background:var(--surface2);color:var(--muted);border:2px solid var(--border);}
+.bubble-wrap.bc-next .ba-pending{background:var(--next);color:#fff;border-color:var(--next);}
+.bubble-amt{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:6px;white-space:nowrap;}
+.bubble-amt.green{color:var(--green);}
+.bubble-amt.gold{color:var(--gold);}
+.bubble-amt.red{color:var(--red);}
+.bubble-name{font-size:.78rem;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px;}
+.bubble-rung{font-family:'DM Mono',monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-top:2px;}
+.pb-footer{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:.66rem;color:var(--muted);margin-top:6px;flex-wrap:wrap;gap:4px;}
 .pb-footer span{color:var(--gold);}
 
 /* ── STATS BAR ── */
-.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.4rem;box-shadow:var(--card-shadow);position:relative;overflow:hidden;transition:border-color .2s;}
-.stat-label{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
-.stat-value{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;letter-spacing:1px;line-height:1;}
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;margin-bottom:1.5rem;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.4rem 1.6rem;box-shadow:var(--card-shadow);position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.stat-value{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;letter-spacing:1px;line-height:1;}
 .sv-gold{color:var(--gold);}
 .sv-green{color:var(--green);}
 .sv-red{color:var(--red);}
 
 /* ── SECTION TITLE ── */
 .section-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;color:var(--muted);margin-bottom:1rem;}
-
-/* ── LADDER RUNGS ── */
-.ladder-rung{display:grid;grid-template-columns:36px 1fr;}
-.rung-line{display:flex;flex-direction:column;align-items:center;}
-.rung-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:transparent;flex-shrink:0;margin-top:20px;z-index:1;transition:all .3s;}
-.rung-dot.active{background:var(--gold);border-color:var(--gold);box-shadow:0 0 12px var(--gold-dim);}
-.rung-dot.won{background:var(--green);border-color:var(--green);box-shadow:0 0 10px rgba(62,207,110,.4);}
-.rung-dot.lost{background:var(--red);border-color:var(--red);}
-.rung-connector{width:2px;flex:1;min-height:10px;background:var(--border);}
-.rung-connector.filled{background:var(--green);}
 
 /* ── BET CARDS ── */
 .rung-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:10px;padding:1rem 1.2rem;margin:7px 0;transition:border-color .2s,background .2s,box-shadow .2s;box-shadow:var(--card-shadow);}
@@ -313,6 +319,31 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 
 .rung-note{margin-top:7px;font-size:.79rem;color:var(--muted);font-style:italic;border-top:1px solid var(--border);padding-top:7px;}
 .rung-actions{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;}
+
+/* ── ACTIVE BET CARD ── */
+.rung-card.c-prominent{padding:1.3rem 1.5rem;margin:0 0 1.2rem;box-shadow:0 4px 20px rgba(0,0,0,.12),var(--card-shadow);}
+.abc-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.abc-who{display:flex;align-items:center;gap:12px;}
+.abc-name{font-weight:700;font-size:1.05rem;}
+.abc-desc{font-size:.83rem;color:var(--muted);margin-top:1px;}
+.abc-badge{font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:1px;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+.abc-badge.live{color:var(--red);border:1px solid var(--border-red);background:var(--surface-red);}
+.abc-badge.pending{color:var(--muted);border:1px solid var(--border);background:var(--surface2);}
+.abc-stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.9rem 1.1rem;margin-top:10px;}
+
+/* ── LIKELIHOOD TO HIT ── */
+.likelihood-block{margin-top:14px;}
+.lk-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.lk-title{font-family:'DM Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);}
+.lk-pct{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--text);letter-spacing:1px;}
+.lk-track{width:100%;height:7px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);overflow:hidden;}
+.lk-fill{height:100%;background:var(--green);border-radius:4px;transition:width .5s ease;}
+.lk-source{font-size:.7rem;color:var(--muted);margin-top:5px;}
+
+/* ── COMPACT BET HISTORY ── */
+.bet-history{max-height:520px;overflow-y:auto;padding-right:2px;}
+.bet-history .rung-card{margin:0 0 8px;}
+.abc-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;}
 
 .empty{text-align:center;padding:3.5rem 1rem;color:var(--muted);}
 .empty .big{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;color:var(--border);letter-spacing:4px;}
@@ -622,15 +653,21 @@ textarea{resize:vertical;min-height:56px;}
   .stat-card{padding:.8rem 1rem;}
   .stat-value{font-size:1.5rem;}
   .stat-label{font-size:.6rem;}
-  /* Progress slots — squeeze to fit all on one line */
+  /* Progress bubbles — horizontally scrollable on mobile */
   .progress-block{padding:.8rem .8rem;}
-  .pb-slot-name{font-size:.48rem;letter-spacing:0;}
+  .bubble-wrap{min-width:64px;padding:6px 8px;}
+  .bubble-wrap.bc-active{padding:8px 10px;}
+  .bubble-avatar{width:38px;height:38px;font-size:.72rem;}
+  .bubble-wrap.bc-active .bubble-avatar{width:48px;height:48px;font-size:.82rem;}
+  .bubble-name{font-size:.7rem;max-width:60px;}
+  .bubble-amt{font-size:.6rem;}
   /* Cards */
   .rung-card{padding:.8rem .9rem;}
   .rung-details{gap:.8rem;}
   .rung-num{font-size:.58rem;}
   .rung-actions{gap:5px;}
   .btn-sm{padding:4px 9px;font-size:.72rem;}
+  .abc-stats-row{grid-template-columns:1fr;gap:.5rem;}
   /* Leaderboard */
   .lb-grid{grid-template-columns:1fr 1fr;gap:.6rem;}
   .lb-card{padding:.8rem .9rem;}
@@ -646,7 +683,7 @@ textarea{resize:vertical;min-height:56px;}
   .section-title{font-size:1.1rem;letter-spacing:2px;}
 }
 @media(max-width:380px){
-  .pb-slot-name{display:none;}
+  .bubble-name{display:none;}
   .stats-bar{grid-template-columns:1fr 1fr;}
 }
 
@@ -721,19 +758,6 @@ textarea{resize:vertical;min-height:56px;}
       </div>
     </div>
 
-    <!-- PROGRESS + ROTATION -->
-    <div class="progress-block">
-      <div class="pb-header">
-        <div class="pb-label" id="pb-label">Ladder Progress — rungs to win</div>
-        <div class="pb-count"><span id="pb-won">0</span> / <span id="pb-total">—</span></div>
-      </div>
-      <div class="pb-slots" id="pb-slots"></div>
-      <div class="pb-footer">
-        <div>Current Pot: <span id="pb-pot">$0.00</span></div>
-        <div id="pb-next"></div>
-      </div>
-    </div>
-
     <!-- STATS -->
     <div class="stats-bar">
       <div class="stat-card"><div class="stat-label">At Stake</div><div class="stat-value sv-gold" id="stat-pot">$0.00</div></div>
@@ -742,7 +766,19 @@ textarea{resize:vertical;min-height:56px;}
       <div class="stat-card"><div class="stat-label">Ladders Won</div><div class="stat-value sv-gold" id="stat-ladders">0</div></div>
     </div>
 
-    <div class="section-title">ACTIVE LADDER</div>
+    <!-- PROGRESS + ROTATION (horizontal avatar-bubble ladder) -->
+    <div class="progress-block">
+      <div class="pb-header">
+        <div class="pb-label" id="pb-label">Ladder Progress — rungs to win</div>
+        <div class="pb-pot-inline">Pot now <span id="pb-pot">$0.00</span></div>
+      </div>
+      <div class="pb-slots" id="pb-slots"></div>
+      <div class="pb-footer">
+        <div id="pb-next"></div>
+        <div class="pb-count"><span id="pb-won">0</span> / <span id="pb-total">—</span> won</div>
+      </div>
+    </div>
+
     <div id="ladder-container">
       <div class="empty"><div class="big">⟳</div><p>Connecting to Firestore...</p></div>
     </div>
@@ -1456,6 +1492,59 @@ function calcEst(amount,odds){
   if(o<0) return a*(100/Math.abs(o));
   return 0;
 }
+function initials(name){
+  const parts=(name||'?').trim().split(/\s+/);
+  return parts.length>1 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : (name||'?').slice(0,2).toUpperCase();
+}
+
+// ── Likelihood to Hit ──────────────────────────────────
+// American odds → implied win probability (0-100)
+function americanImplied(odds){
+  const o=parseInt(odds);
+  if(!o||isNaN(o)) return 50;
+  return o>0 ? Math.round(100/(o+100)*100) : Math.round(Math.abs(o)/(Math.abs(o)+100)*100);
+}
+// Pull covering/not-covering signals from any legs with a live/final linked game;
+// falls back to the odds-implied probability if nothing is live yet.
+function estimateLikelihood(bet){
+  const legs=(bet.legs||[]).filter(l=>l.game);
+  const signals=[];
+  legs.forEach(leg=>{
+    const s=_scoreCache[leg.game.espnId]?.data;
+    if(!s||s.statusName==='STATUS_SCHEDULED') return;
+    const bs = leg.type==='prop' ? getPlayerPropStatus(leg,s) : getBetStatus(leg.pick,s,leg.game);
+    if(bs && (bs.covering===true||bs.covering===false)) signals.push(bs.covering);
+  });
+  if(signals.length){
+    const hitRate = signals.filter(Boolean).length/signals.length;
+    return Math.round(8 + hitRate*84); // 8%..92%, never absolute 0/100 mid-game
+  }
+  return americanImplied(bet.odds);
+}
+function likelihoodIsLive(bet){
+  return (bet.legs||[]).some(leg=>{
+    if(!leg.game) return false;
+    const s=_scoreCache[leg.game.espnId]?.data;
+    return s && s.statusName!=='STATUS_SCHEDULED';
+  });
+}
+function renderLikelihoodBar(bet){
+  const pct=estimateLikelihood(bet);
+  const label=likelihoodIsLive(bet)?'Live win probability via ESPN':'Implied probability from odds';
+  return `<div class="likelihood-block" id="likelihood-${bet.id}">
+    <div class="lk-header"><span class="lk-title">Likelihood to Hit</span><span class="lk-pct">${pct}%</span></div>
+    <div class="lk-track"><div class="lk-fill" style="width:${pct}%"></div></div>
+    <div class="lk-source">● ${label}</div>
+  </div>`;
+}
+function updateLikelihoodBar(betId){
+  const bet=(window._state?.bets||[]).find(b=>b.id===betId); if(!bet) return;
+  const el=document.getElementById(`likelihood-${betId}`); if(!el) return;
+  const pct=estimateLikelihood(bet);
+  const pctEl=el.querySelector('.lk-pct'); if(pctEl) pctEl.textContent=pct+'%';
+  const fillEl=el.querySelector('.lk-fill'); if(fillEl) fillEl.style.width=pct+'%';
+  const srcEl=el.querySelector('.lk-source'); if(srcEl) srcEl.textContent='● '+(likelihoodIsLive(bet)?'Live win probability via ESPN':'Implied probability from odds');
+}
 
 // ── Progress + Rotation (combined) ───────────────────
 function renderProgress(){
@@ -1485,17 +1574,20 @@ function renderProgress(){
     isNext: i === bets.length,
   }));
 
-  slotsEl.innerHTML = slots.map(s => {
-    let barCls = '', nameCls = '';
-    if(s.bet){
-      barCls  = s.bet.status==='won'?'won':s.bet.status==='lost'?'lost':s.bet.status==='active'?'active':'';
-      nameCls = barCls;
-    } else if(s.isNext){
-      nameCls = 'next';
-    }
-    return `<div class="pb-slot">
-      <div class="pb-slot-bar ${barCls}"></div>
-      <div class="pb-slot-name ${nameCls}">${esc(s.name)}</div>
+  slotsEl.innerHTML = slots.map((s,i) => {
+    const status = s.bet?.status||null; // 'won'|'active'|'lost'|null(pending)
+    const wrapCls = status==='won'?'bc-won':status==='active'?'bc-active':status==='lost'?'bc-lost':s.isNext?'bc-next':'';
+    const avatarCls = status==='won'?'ba-won':status==='active'?'ba-active':status==='lost'?'ba-lost':'ba-pending';
+    let amtHtml = '<span class="bubble-amt">—</span>';
+    if(status==='won')       amtHtml = `<span class="bubble-amt green">+${fmt(s.bet.payout)}</span>`;
+    else if(status==='lost') amtHtml = `<span class="bubble-amt red">-${fmt(s.bet.amount)}</span>`;
+    else if(status==='active') amtHtml = `<span class="bubble-amt gold">${fmt(s.bet.amount)}</span>`;
+    const connector = i>0 ? `<div class="pb-connector ${slots[i-1].bet?.status==='won'?'filled':''}"></div>` : '';
+    return `${connector}<div class="bubble-wrap ${wrapCls}">
+      <div class="bubble-avatar ${avatarCls}">${esc(initials(s.name))}</div>
+      ${amtHtml}
+      <div class="bubble-name">${esc(s.name)}</div>
+      <div class="bubble-rung">R${i+1}</div>
     </div>`;
   }).join('');
 
@@ -1551,76 +1643,67 @@ function renderStats(){
 }
 
 // ── Ladder rungs ──────────────────────────────────────
-function renderLadder(){
-  const container = document.getElementById('ladder-container');
-  const bets = window._state?.bets||[];
-  if(!bets.length){ container.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>'; return; }
-  container.innerHTML='';
-  // Display newest (highest rung) first
-  const display = [...bets].reverse();
-  display.forEach((bet)=>{
-    const i = bets.indexOf(bet); // original index = rung number
-    const isDone = bet.status==='won' || bet.status==='lost';
-    const dotCls={active:'active',won:'won',lost:'lost',pending:''}[bet.status]||'';
-    const cardCls={active:'c-active',won:'c-won',lost:'c-lost'}[bet.status]||'';
-    const statusLabel={pending:'Pending',active:'Live',won:'Won',lost:'Lost'}[bet.status];
-    const est=calcEst(bet.amount,bet.odds);
-    const legs=bet.legs||[];
-    const isParlay=bet.betType==='parlay';
-    const rung=document.createElement('div');
-    rung.className='ladder-rung';
+// Builds the legs/score-widgets block shared by the active card and the expanded history view
+function legsBlockHTML(bet){
+  const legs=bet.legs||[];
+  if(!legs.length) return '';
+  const isParlay=bet.betType==='parlay';
+  return `
+    <div class="legs-wrap">
+      <div class="legs-lbl">${isParlay?'Parlay Legs':'Bet Details'}</div>
+      ${legs.map((leg,li)=>`
+        <div class="leg ${leg.type==='prop'?'lp':''}" id="leg-${bet.id}-${li}">
+          <div class="leg-row">
+            <div>
+              <div class="leg-name">${leg.type==='prop'?`👤 ${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
+              <div class="leg-pick">${esc(leg.pick||'')}${leg.line?` · ${esc(leg.line)}`:''}${leg.gameContext?` · ${esc(leg.gameContext)}`:''}</div>
+              ${leg.type==='prop'?`<div class="prop-note">${esc(leg.propType||'')}</div>`:''}
+            </div>
+            <span class="ltag ${leg.type==='prop'?'ltag-prop':'ltag-game'}">${leg.type==='prop'?'PROP':'GAME'}</span>
+          </div>
+          ${leg.game?`<div id="score-${bet.id}-${li}" class="score-w"><span class="sw-loading">Loading score...</span></div>`:''}
+        </div>`).join('')}
+    </div>`;
+}
 
-    // Collapsed view for done bets
-    const collapsedContent = isDone ? `
-      <div class="rung-card ${cardCls}" id="card-${bet.id}" style="cursor:pointer;" onclick="toggleRung('${bet.id}')">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div class="rung-num" style="margin:0;">Rung ${i+1}</div>
-            <div class="rung-person">${esc(bet.person||'Unknown')}</div>
-            ${bet.desc?`<div style="font-size:.8rem;color:var(--muted);">${esc(bet.desc)}</div>`:''}
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            ${bet.status==='won'&&bet.payout>0?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);">+${fmt(bet.payout)}</span>`:''}
-            ${bet.status==='lost'?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--red);">-${fmt(bet.amount)}</span>`:''}
-            <span class="badge b-${bet.status}">${statusLabel}</span>
-            <span style="color:var(--muted);font-size:.75rem;">▼</span>
-          </div>
-        </div>
-      </div>` : `
-      <div class="rung-card ${cardCls}" id="card-${bet.id}">
-        <div class="rung-num">Rung ${i+1} of ${GOAL_RUNGS()}</div>
-        <div class="rung-header">
-          <div class="rung-person">${esc(bet.person||'Unknown')}</div>
-          <div class="badge-row">
-            ${isParlay?`<span class="badge b-parlay">🔗 Parlay ${legs.length} legs</span>`:''}
-            <span id="hit-badge-${bet.id}"></span>
-            <span class="badge b-${bet.status}">${statusLabel}</span>
+// The one prominent card for the current active/pending bet
+function activeBetCardHTML(bet, i){
+  const est=calcEst(bet.amount,bet.odds);
+  const legs=bet.legs||[];
+  const isParlay=bet.betType==='parlay';
+  const avatarCls = bet.status==='active'?'ba-active':'ba-pending';
+  const isLive = bet.status==='active';
+  return `
+    <div class="rung-card c-prominent ${bet.status==='active'?'c-active':''}" id="card-${bet.id}">
+      <div class="abc-header">
+        <div class="abc-who">
+          <div class="bubble-avatar ${avatarCls}" style="width:44px;height:44px;font-size:.8rem;">${esc(initials(bet.person))}</div>
+          <div>
+            <div class="abc-name">${esc(bet.person||'Unknown')}</div>
+            ${bet.desc?`<div class="abc-desc">${esc(bet.desc)}</div>`:''}
           </div>
         </div>
-        <div class="rung-details">
-          ${bet.desc?`<div class="det"><span class="det-lbl">Pick</span><span class="det-val">${esc(bet.desc)}</span></div>`:''}
-          <div class="det"><span class="det-lbl">Wager</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
-          ${bet.odds?`<div class="det"><span class="det-lbl">Odds</span><span class="det-val">${esc(bet.odds)}</span></div>`:''}
-          ${bet.status!=='won'&&est>0?`<div class="det"><span class="det-lbl">Est. Payout</span><span class="det-val green">${fmt(est)}</span></div>`:''}
-          ${bet.status==='won'&&bet.payout>0?`<div class="det"><span class="det-lbl">Payout</span><span class="det-val green">${fmt(bet.payout)}</span></div>`:''}
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          ${isParlay?`<span class="badge b-parlay">🔗 Parlay ${legs.length} legs</span>`:''}
+          <span id="hit-badge-${bet.id}"></span>
+          <span class="abc-badge ${isLive?'live':'pending'}">${isLive?'● LIVE':'PENDING'}</span>
         </div>
-        ${legs.length?`
-        <div class="legs-wrap">
-          <div class="legs-lbl">${isParlay?'Parlay Legs':'Bet Details'}</div>
-          ${legs.map((leg,li)=>`
-            <div class="leg ${leg.type==='prop'?'lp':''}" id="leg-${bet.id}-${li}">
-              <div class="leg-row">
-                <div>
-                  <div class="leg-name">${leg.type==='prop'?`👤 ${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
-                  <div class="leg-pick">${esc(leg.pick||'')}${leg.line?` · ${esc(leg.line)}`:''}${leg.gameContext?` · ${esc(leg.gameContext)}`:''}</div>
-                  ${leg.type==='prop'?`<div class="prop-note">${esc(leg.propType||'')}</div>`:''}
-                </div>
-                <span class="ltag ${leg.type==='prop'?'ltag-prop':'ltag-game'}">${leg.type==='prop'?'PROP':'GAME'}</span>
-              </div>
-              ${leg.game?`<div id="score-${bet.id}-${li}" class="score-w"><span class="sw-loading">Loading score...</span></div>`:''}
-            </div>`).join('')}
-        </div>`:''}
-        ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
+      </div>
+
+      ${legsBlockHTML(bet)}
+
+      <div class="abc-stats-row">
+        <div class="det"><span class="det-lbl">Staked</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
+        <div class="det"><span class="det-lbl">Odds</span><span class="det-val">${bet.odds?esc(bet.odds):'—'}</span></div>
+        <div class="det"><span class="det-lbl">To Win</span><span class="det-val green">${est>0?fmt(est):'—'}</span></div>
+      </div>
+
+      ${renderLikelihoodBar(bet)}
+
+      ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
+
+      <div class="abc-footer">
+        <div class="reactions-row" id="reactions-${bet.id}"></div>
         <div class="rung-actions">
           ${bet.status==='pending'?`<button class="btn btn-ghost btn-sm" onclick="setActive('${bet.id}')">▶ Set Live</button>`:''}
           ${bet.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openOutcomeModal('${bet.id}')">Record Outcome</button>`:''}
@@ -1628,18 +1711,57 @@ function renderLadder(){
           <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')">✏ Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deleteBet('${bet.id}')">✕</button>
         </div>
-      </div>`;
-
-    rung.innerHTML=`
-      <div class="rung-line">
-        <div class="rung-dot ${dotCls}"></div>
-        <div class="rung-connector ${bet.status==='won'?'filled':''}"></div>
       </div>
-      ${isDone ? collapsedContent : collapsedContent}`;
-    container.appendChild(rung);
-    if(!isDone){
-      legs.forEach((leg,li)=>{ if(leg.game) loadScore(bet.id,li,leg); });
-    }
+    </div>`;
+}
+
+// One compact, click-to-expand row for a settled (won/lost) bet
+function historyRowHTML(bet, i){
+  const cardCls={won:'c-won',lost:'c-lost'}[bet.status]||'';
+  const statusLabel={won:'Won',lost:'Lost'}[bet.status];
+  return `
+    <div class="rung-card ${cardCls}" id="card-${bet.id}" style="cursor:pointer;" onclick="toggleRung('${bet.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="rung-num" style="margin:0;">Rung ${i+1}</div>
+          <div class="rung-person">${esc(bet.person||'Unknown')}</div>
+          ${bet.desc?`<div style="font-size:.8rem;color:var(--muted);">${esc(bet.desc)}</div>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${bet.status==='won'&&bet.payout>0?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);">+${fmt(bet.payout)}</span>`:''}
+          ${bet.status==='lost'?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--red);">-${fmt(bet.amount)}</span>`:''}
+          <span class="badge b-${bet.status}">${statusLabel}</span>
+          <span style="color:var(--muted);font-size:.75rem;">▼</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderLadder(){
+  const container = document.getElementById('ladder-container');
+  const bets = window._state?.bets||[];
+  if(!bets.length){ container.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>'; return; }
+
+  const openBets = bets.map((b,i)=>({b,i})).filter(x=>x.b.status==='pending'||x.b.status==='active');
+  const doneBets = bets.map((b,i)=>({b,i})).filter(x=>x.b.status==='won'||x.b.status==='lost').reverse(); // newest first
+
+  let html = '';
+  if(openBets.length){
+    // Most recent open bet is "current"; render newest-first so it's always on top
+    [...openBets].reverse().forEach(({b,i})=>{ html += activeBetCardHTML(b,i); });
+  } else {
+    html += `<div class="empty"><div class="big">✓</div><p>No active bet right now. Hit + Add Bet to keep the ladder climbing.</p></div>`;
+  }
+  if(doneBets.length){
+    html += `<div class="section-title" style="margin-top:1.5rem;">HISTORY</div><div class="bet-history">`;
+    doneBets.forEach(({b,i})=>{ html += historyRowHTML(b,i); });
+    html += `</div>`;
+  }
+  container.innerHTML = html;
+
+  openBets.forEach(({b})=>{
+    (b.legs||[]).forEach((leg,li)=>{ if(leg.game) loadScore(b.id,li,leg); });
+    renderReactions(b.id);
   });
 }
 
@@ -2107,6 +2229,7 @@ function applyScoreToEl(el, betId, li, leg, s){
       <div class="sw-refresh" onclick="refreshOne('${betId}',${li})">↻ refresh</div>
     </div>`;
   updateHitBadge(betId);
+  updateLikelihoodBar(betId);
 }
 
 async function loadScore(betId,li,leg){

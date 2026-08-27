@@ -906,6 +906,18 @@ textarea{resize:vertical;min-height:56px;}
       </div>
     </div>
 
+    <div class="section-title" style="margin-top:2rem;">MARKET ODDS</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
+      <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
+        Powers the pre-game "Likelihood to Hit" tier — averages DraftKings/FanDuel/BetMGM/Caesars odds for the bet's market. Get a free-tier key at <b>the-odds-api.com</b>. Without a key, the likelihood bar falls back to the odds you entered on the bet itself.
+      </p>
+      <div class="fg" style="margin-bottom:.8rem;">
+        <label>The Odds API Key</label>
+        <input type="password" id="odds-api-key-input" placeholder="your-odds-api-key" onblur="saveOddsApiKey()">
+      </div>
+      <div id="odds-api-key-status" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);"></div>
+    </div>
+
     <div class="section-title" style="margin-top:2rem;">AI SETTINGS</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
       <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
@@ -1753,14 +1765,104 @@ function pickFavorsHome(pick, s, legGame){
   return null;
 }
 const clampProb = n => Math.min(96, Math.max(4, n));
+
+// ════════════════════════════════════════════════════════
+// THE ODDS API — tier ② market-implied probability (pre-game)
+// Untested against a live key (no network access to verify from this build
+// environment) — written defensively: any failure just falls through to the
+// existing bet-odds fallback, no behavior change for anyone without a key.
+// ════════════════════════════════════════════════════════
+const ODDS_API_SPORT_KEYS = {
+  'nfl':'americanfootball_nfl', 'nba':'basketball_nba', 'mlb':'baseball_mlb', 'nhl':'icehockey_nhl',
+  'college-football':'americanfootball_ncaaf', 'mens-college-basketball':'basketball_ncaab', 'usa.1':'soccer_usa_mls'
+};
+const ODDS_API_BOOKMAKERS = ['draftkings','fanduel','betmgm','williamhill_us']; // williamhill_us = Caesars
+const _oddsCache = {}; // `${sportKey}:${market}` → { ts, data }
+function marketFamilyFor(marketKey){
+  if(!marketKey) return null;
+  if(marketKey.includes('ml')) return 'h2h';
+  if(marketKey.includes('spread')) return 'spreads';
+  if(marketKey.includes('total')) return 'totals';
+  return null;
+}
+async function fetchMarketOdds(sportKey, family){
+  const cacheKey = `${sportKey}:${family}`;
+  const cached = _oddsCache[cacheKey];
+  if(cached && Date.now()-cached.ts < 5*60*1000) return cached.data;
+  const apiKey = getOddsApiKey();
+  if(!apiKey) return null;
+  try{
+    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?apiKey=${apiKey}&regions=us&markets=${family}&oddsFormat=american&bookmakers=${ODDS_API_BOOKMAKERS.join(',')}`;
+    const r = await fetch(url);
+    if(!r.ok) return null;
+    const data = await r.json();
+    _oddsCache[cacheKey] = { ts: Date.now(), data };
+    return data;
+  }catch(e){ return null; }
+}
+// Match this leg's game by team name within an Odds API response, then average the
+// picked side's price across configured books into an implied probability (0-100).
+function marketImpliedProb(oddsEvents, leg, family){
+  if(!Array.isArray(oddsEvents)) return null;
+  const home=(leg.game?.homeFullName||leg.game?.homeTeam||'').toLowerCase();
+  const away=(leg.game?.awayFullName||leg.game?.awayTeam||'').toLowerCase();
+  const ev = oddsEvents.find(e=>{
+    const h=(e.home_team||'').toLowerCase(), a=(e.away_team||'').toLowerCase();
+    return (home&&(h.includes(home)||home.includes(h))) || (away&&(a.includes(away)||away.includes(a)));
+  });
+  if(!ev) return null;
+  const favorsHome = pickFavorsHome(leg.pick, {homeTeam:leg.game.homeTeam,homeFullName:leg.game.homeFullName,homeLocation:leg.game.homeLocation,awayTeam:leg.game.awayTeam,awayFullName:leg.game.awayFullName,awayLocation:leg.game.awayLocation}, leg.game);
+  const prices=[];
+  (ev.bookmakers||[]).forEach(bk=>{
+    const m=(bk.markets||[]).find(mk=>mk.key===family); if(!m) return;
+    const outcome = family==='h2h'
+      ? m.outcomes?.find(o=>favorsHome ? o.name===ev.home_team : o.name===ev.away_team)
+      : m.outcomes?.[0]; // spreads/totals: first line as a reasonable proxy
+    if(outcome && typeof outcome.price==='number') prices.push(outcome.price);
+  });
+  if(!prices.length) return null;
+  return Math.round(prices.reduce((s,p)=>s+americanImplied(p),0)/prices.length);
+}
+// Kicks off a background fetch for a pre-game bet's market odds, then repaints the bar.
+// No-ops without an API key, once live, or for multi-leg bets (parlay market-odds
+// blending isn't implemented — falls back to the bet's own entered odds instead).
+async function loadMarketOdds(bet){
+  if(!getOddsApiKey()) return;
+  const legs=(bet.legs||[]).filter(l=>l.game);
+  if(legs.length!==1) return;
+  const leg=legs[0];
+  const s=_scoreCache[leg.game.espnId]?.data;
+  if(s && s.statusName!=='STATUS_SCHEDULED') return; // live/final — tiers ①/③ already cover it
+  const sportKey = ODDS_API_SPORT_KEYS[leg.game.league];
+  const family = marketFamilyFor(leg.market) || (isMoneylinePick(leg)?'h2h':null);
+  if(!sportKey||!family) return;
+  await fetchMarketOdds(sportKey, family);
+  updateLikelihoodBar(bet.id);
+}
+
 // Three-tier priority per leg: ① real ESPN live win probability (moneyline only),
 // ③ pace-based covering/not-covering heuristic. Legs combine like an actual parlay
-// (multiply independent probabilities). ② market-odds tier lives in estimateLikelihood's
-// final fallback until a real odds API is wired in — see americanImplied().
+// (multiply independent probabilities). ② market-odds tier is checked in the final
+// fallback below (pre-game, single-leg, needs an Odds API key).
 // Returns { pct, source } — source names whichever tier actually produced the number.
+// Tier ② — cached market-odds probability for a pre-game, single-leg bet (needs an API key
+// and a background loadMarketOdds() call to have already populated the cache).
+function oddsApiFallback(bet){
+  const legs=(bet.legs||[]).filter(l=>l.game);
+  if(legs.length!==1) return null;
+  const leg=legs[0];
+  const sportKey = ODDS_API_SPORT_KEYS[leg.game.league];
+  const family = marketFamilyFor(leg.market) || (isMoneylinePick(leg)?'h2h':null);
+  if(!sportKey||!family) return null;
+  const cached = _oddsCache[`${sportKey}:${family}`];
+  if(!cached) return null;
+  const prob = marketImpliedProb(cached.data, leg, family);
+  if(prob==null) return null;
+  return { pct: clampProb(prob), source:'Market odds (DK/FD/BetMGM/Caesars)' };
+}
 function estimateLikelihood(bet){
   const legs=(bet.legs||[]).filter(l=>l.game);
-  if(!legs.length) return { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
+  if(!legs.length) return oddsApiFallback(bet) || { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
 
   const legProbs=[];
   let usedRealWinProb=false, usedPaceHeuristic=false;
@@ -1789,7 +1891,7 @@ function estimateLikelihood(bet){
       : usedPaceHeuristic ? 'Live pace tracking' : 'Implied probability from odds';
     return { pct, source };
   }
-  return { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
+  return oddsApiFallback(bet) || { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
 }
 function renderLikelihoodBar(bet){
   const {pct,source}=estimateLikelihood(bet);
@@ -2024,6 +2126,7 @@ function renderLadder(){
   openBets.forEach(({b})=>{
     (b.legs||[]).forEach((leg,li)=>{ if(leg.game) loadScore(b.id,li,leg); });
     renderReactions(b.id);
+    loadMarketOdds(b);
   });
 }
 
@@ -3020,6 +3123,14 @@ setTimeout(()=>{
   if(inp && k) inp.value = k;
   if(st) st.textContent = k ? '✅ VAPID key saved.' : 'No VAPID key saved yet.';
 }, 600);
+// Restore saved Odds API key into admin input
+setTimeout(()=>{
+  const inp = document.getElementById('odds-api-key-input');
+  const st  = document.getElementById('odds-api-key-status');
+  const k   = getOddsApiKey();
+  if(inp && k) inp.value = k;
+  if(st) st.textContent = k ? '✅ Key saved.' : 'No key saved yet.';
+}, 600);
 
 // ════════════════════════════════════════════════════════
 // PUSH NOTIFICATIONS
@@ -3063,6 +3174,22 @@ function saveVapidKey(){
   localStorage.setItem('dtladder_vapid_key', k);
   window.db_saveSettings({vapidKey: k});
   if(st) st.textContent = k ? '✅ VAPID key saved for all devices.' : 'Key cleared.';
+}
+
+// ════════════════════════════════════════════════════════
+// THE ODDS API KEY (the-odds-api.com — market implied probability)
+// ════════════════════════════════════════════════════════
+function getOddsApiKey(){
+  return window._state?.settings?.oddsApiKey || localStorage.getItem('dtladder_odds_api_key') || '';
+}
+function saveOddsApiKey(){
+  const inp = document.getElementById('odds-api-key-input');
+  const st  = document.getElementById('odds-api-key-status');
+  if(!inp) return;
+  const k = inp.value.trim();
+  localStorage.setItem('dtladder_odds_api_key', k);
+  window.db_saveSettings({oddsApiKey: k});
+  if(st) st.textContent = k ? '✅ Odds API key saved for all devices.' : 'Key cleared.';
 }
 
 // Client-side notification trigger (fires when app is open)

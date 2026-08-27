@@ -2,13 +2,18 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
       "firebase.json",
       ".firebaserc",
       ".git/**",
-      "node_modules/**"
+      "node_modules/**",
+      "functions/**"
     ],
     "rewrites": [
       {

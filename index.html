@@ -23,6 +23,7 @@ import {
   getFirestore, collection, doc, getDoc, setDoc, onSnapshot,
   addDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getMessaging, getToken, isSupported } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js';
 
 // 🔥 REPLACE THIS BLOCK WITH YOUR FIREBASE CONFIG 🔥
 const firebaseConfig = {
@@ -91,6 +92,16 @@ window.db_toggleReaction = async (betId, emoji, personName) => {
 };
 window.db_savePushToken = async (token) => {
   await setDoc(doc(db,'pushTokens',token), { token, savedAt: serverTimestamp() });
+};
+// Real FCM device token (requires a VAPID key + registered service worker). Returns null if
+// messaging isn't supported (e.g. Safari without proper setup) or the token request fails.
+window.getFcmToken = async (vapidKey) => {
+  try {
+    if(!(await isSupported())) return null;
+    const reg = await navigator.serviceWorker.ready;
+    const messaging = getMessaging(app);
+    return await getToken(messaging, { vapidKey, serviceWorkerRegistration: reg });
+  } catch(e){ console.error('FCM token error', e); return null; }
 };
 window.db_saveSettings  = async (data) => {
   await setDoc(doc(db,'settings','config'), data, {merge:true});
@@ -881,12 +892,17 @@ textarea{resize:vertical;min-height:56px;}
       <div id="notif-status" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:1rem;"></div>
       <button class="btn btn-ghost" id="notif-btn" onclick="requestNotifPermission()">🔔 Enable Notifications on This Device</button>
       <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Backend Setup (optional)</div>
-        <p style="font-size:.78rem;color:var(--muted);line-height:1.6;">
-          To send automatic notifications when outcomes are recorded, you'll need to set up Firebase Cloud Functions.
-          The token for this device is saved to Firestore under <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">pushTokens</code> once enabled.
-          <br><br>Until then, notifications will only fire when someone is actively using the app.
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Backend Setup (required for cross-device push)</div>
+        <p style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.8rem;">
+          Paste your Web Push <b>VAPID key</b> below (Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → generate/copy the key pair).
+          This device's real FCM token then saves to Firestore under <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">pushTokens</code>.
+          Deploying the <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">functions/</code> folder (requires the Firebase <b>Blaze</b> billing plan) is what actually sends to those tokens — until deployed, notifications still only fire when someone has the app open.
         </p>
+        <div class="fg" style="margin-bottom:0;">
+          <label>VAPID Key</label>
+          <input type="password" id="vapid-key-input" placeholder="BN...your public VAPID key..." onblur="saveVapidKey()">
+        </div>
+        <div id="vapid-key-status" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-top:6px;"></div>
       </div>
     </div>
 
@@ -2996,6 +3012,14 @@ setTimeout(()=>{
   if(inp && k) inp.value = k;
   if(st) st.textContent = k ? '✅ Key saved.' : 'No key saved yet.';
 }, 600);
+// Restore saved VAPID key into admin input
+setTimeout(()=>{
+  const inp = document.getElementById('vapid-key-input');
+  const st  = document.getElementById('vapid-key-status');
+  const k   = getVapidKey();
+  if(inp && k) inp.value = k;
+  if(st) st.textContent = k ? '✅ VAPID key saved.' : 'No VAPID key saved yet.';
+}, 600);
 
 // ════════════════════════════════════════════════════════
 // PUSH NOTIFICATIONS
@@ -3005,20 +3029,40 @@ async function requestNotifPermission(){
   const btn = document.getElementById('notif-btn');
   if(!('Notification' in window)){ if(statusEl) statusEl.textContent='❌ Notifications not supported in this browser.'; return; }
   const perm = await Notification.requestPermission();
-  if(perm==='granted'){
-    if(statusEl) statusEl.textContent='✅ Notifications enabled on this device.';
-    if(btn) btn.textContent='✅ Notifications Enabled';
-    // ── BACKEND HOOK ──────────────────────────────────────
-    // When you set up Firebase Cloud Messaging, replace this block:
-    //   const messaging = getMessaging(app);
-    //   const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' });
-    //   await window.db_savePushToken(token);
-    // For now we just save a placeholder so the collection exists:
-    await window.db_savePushToken('manual-' + Date.now());
-    // ─────────────────────────────────────────────────────
-  } else {
+  if(perm!=='granted'){
     if(statusEl) statusEl.textContent='❌ Permission denied. Enable notifications in your browser settings.';
+    return;
   }
+  if(btn) btn.textContent='✅ Notifications Enabled';
+  const vapidKey = getVapidKey();
+  if(!vapidKey){
+    if(statusEl) statusEl.textContent='✅ Enabled on this device — add a VAPID key below to receive push when the app is closed.';
+    await window.db_savePushToken('manual-' + Date.now()); // placeholder so the collection exists
+    return;
+  }
+  const token = await window.getFcmToken(vapidKey);
+  if(token){
+    await window.db_savePushToken(token);
+    if(statusEl) statusEl.textContent='✅ Notifications enabled — this device will receive push once functions/ is deployed.';
+  } else {
+    if(statusEl) statusEl.textContent='⚠️ Could not get a push token. Check the VAPID key and that sw.js is registered.';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// VAPID KEY (for real FCM tokens — Firebase Console → Cloud Messaging → Web Push certificates)
+// ════════════════════════════════════════════════════════
+function getVapidKey(){
+  return window._state?.settings?.vapidKey || localStorage.getItem('dtladder_vapid_key') || '';
+}
+function saveVapidKey(){
+  const inp = document.getElementById('vapid-key-input');
+  const st  = document.getElementById('vapid-key-status');
+  if(!inp) return;
+  const k = inp.value.trim();
+  localStorage.setItem('dtladder_vapid_key', k);
+  window.db_saveSettings({vapidKey: k});
+  if(st) st.textContent = k ? '✅ VAPID key saved for all devices.' : 'Key cleared.';
 }
 
 // Client-side notification trigger (fires when app is open)

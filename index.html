@@ -1234,11 +1234,23 @@ async function getLiveScore(espnId,sport,league){
         });
       });
     });
+    // ESPN publishes live per-play win probability for some sports/games (not guaranteed —
+    // e.g. reliably there for NFL/NBA, often absent for MLB/NHL/college). Take the latest entry.
+    let winProb = null;
+    const wpArr = d.winprobability;
+    if(Array.isArray(wpArr) && wpArr.length){
+      const last = wpArr[wpArr.length-1];
+      if(typeof last?.homeWinPercentage === 'number'){
+        const homePct = Math.round(last.homeWinPercentage*100);
+        winProb = { homePct, awayPct: 100-homePct };
+      }
+    }
     return { homeTeam:home?.team?.abbreviation||'?', homeScore:home?.score??'—',
              awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
              homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
              homeLocation:home?.team?.location||'', awayLocation:away?.team?.location||'',
              homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
+             winProb,
              statusName:comp?.status?.type?.name||'',
              shortDetail:comp?.status?.type?.shortDetail||comp?.status?.type?.description||'',
              playerStats };
@@ -1633,7 +1645,7 @@ function addLeg(){
   const pick=document.getElementById('leg-pick')?.value.trim()||'';
   if(!pick){ alert('Enter a pick/description for this leg.'); return; }
   const leg={id:uid(),type:currentLegType,pick};
-  if(currentLegType==='game'){ if(legGame) leg.game=legGame; }
+  if(currentLegType==='game'){ if(legGame) leg.game=legGame; if(currentMarket) leg.market=currentMarket.k; }
   else {
     const player=document.getElementById('prop-player')?.value.trim()||'';
     if(!player){ alert('Enter the player name.'); return; }
@@ -1707,44 +1719,77 @@ function americanImplied(odds){
 }
 // Pull covering/not-covering signals from any legs with a live/final linked game;
 // falls back to the odds-implied probability if nothing is live yet.
+// A leg counts as a moneyline pick if it was built via the ML/F5-ML market chip,
+// or (for legacy/manually-typed picks) the text says "ML" with no spread number.
+function isMoneylinePick(leg){
+  if(leg?.market==='ml'||leg?.market==='f5ml') return true;
+  if(leg?.market) return false;
+  const p=(leg?.pick||'').toLowerCase();
+  return /\bml\b/.test(p) && !/[+-]\d/.test(p);
+}
+// Coarse home/away match for picking which side of ESPN's winProb applies.
+function pickFavorsHome(pick, s, legGame){
+  const p=(pick||'').toLowerCase();
+  const hTokens = teamTokens(s.homeTeam, s.homeFullName, legGame?.homeLocation||legGame?.homeFullName);
+  const aTokens = teamTokens(s.awayTeam, s.awayFullName, legGame?.awayLocation||legGame?.awayFullName);
+  if(hTokens.some(tok=>tok&&p.includes(tok))) return true;
+  if(aTokens.some(tok=>tok&&p.includes(tok))) return false;
+  return null;
+}
+const clampProb = n => Math.min(96, Math.max(4, n));
+// Three-tier priority per leg: ① real ESPN live win probability (moneyline only),
+// ③ pace-based covering/not-covering heuristic. Legs combine like an actual parlay
+// (multiply independent probabilities). ② market-odds tier lives in estimateLikelihood's
+// final fallback until a real odds API is wired in — see americanImplied().
+// Returns { pct, source } — source names whichever tier actually produced the number.
 function estimateLikelihood(bet){
   const legs=(bet.legs||[]).filter(l=>l.game);
-  const signals=[];
+  if(!legs.length) return { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
+
+  const legProbs=[];
+  let usedRealWinProb=false, usedPaceHeuristic=false;
   legs.forEach(leg=>{
     const s=_scoreCache[leg.game.espnId]?.data;
     if(!s||s.statusName==='STATUS_SCHEDULED') return;
     const bs = leg.type==='prop' ? getPlayerPropStatus(leg,s) : getBetStatus(leg.pick,s,leg.game);
-    if(bs && (bs.covering===true||bs.covering===false)) signals.push(bs.covering);
+    if(!bs || (bs.covering!==true && bs.covering!==false)) return;
+
+    if(bs.type==='spread' && s.winProb && isMoneylinePick(leg)){
+      const favorsHome = pickFavorsHome(leg.pick, s, leg.game);
+      if(favorsHome!==null){
+        legProbs.push(clampProb(favorsHome?s.winProb.homePct:s.winProb.awayPct)/100);
+        usedRealWinProb=true;
+        return;
+      }
+    }
+    legProbs.push(bs.covering ? 0.85 : 0.12); // pace-based heuristic
+    usedPaceHeuristic=true;
   });
-  if(signals.length){
-    const hitRate = signals.filter(Boolean).length/signals.length;
-    return Math.round(8 + hitRate*84); // 8%..92%, never absolute 0/100 mid-game
+
+  if(legProbs.length){
+    const combined = legProbs.reduce((p,v)=>p*v, 1);
+    const pct = Math.round(clampProb(combined*100));
+    const source = usedRealWinProb ? 'Live win probability via ESPN'
+      : usedPaceHeuristic ? 'Live pace tracking' : 'Implied probability from odds';
+    return { pct, source };
   }
-  return americanImplied(bet.odds);
-}
-function likelihoodIsLive(bet){
-  return (bet.legs||[]).some(leg=>{
-    if(!leg.game) return false;
-    const s=_scoreCache[leg.game.espnId]?.data;
-    return s && s.statusName!=='STATUS_SCHEDULED';
-  });
+  return { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
 }
 function renderLikelihoodBar(bet){
-  const pct=estimateLikelihood(bet);
-  const label=likelihoodIsLive(bet)?'Live win probability via ESPN':'Implied probability from odds';
+  const {pct,source}=estimateLikelihood(bet);
   return `<div class="likelihood-block" id="likelihood-${bet.id}">
     <div class="lk-header"><span class="lk-title">Likelihood to Hit</span><span class="lk-pct">${pct}%</span></div>
     <div class="lk-track"><div class="lk-fill" style="width:${pct}%"></div></div>
-    <div class="lk-source">● ${label}</div>
+    <div class="lk-source">● ${source}</div>
   </div>`;
 }
 function updateLikelihoodBar(betId){
   const bet=(window._state?.bets||[]).find(b=>b.id===betId); if(!bet) return;
   const el=document.getElementById(`likelihood-${betId}`); if(!el) return;
-  const pct=estimateLikelihood(bet);
+  const {pct,source}=estimateLikelihood(bet);
   const pctEl=el.querySelector('.lk-pct'); if(pctEl) pctEl.textContent=pct+'%';
   const fillEl=el.querySelector('.lk-fill'); if(fillEl) fillEl.style.width=pct+'%';
-  const srcEl=el.querySelector('.lk-source'); if(srcEl) srcEl.textContent='● '+(likelihoodIsLive(bet)?'Live win probability via ESPN':'Implied probability from odds');
+  const srcEl=el.querySelector('.lk-source'); if(srcEl) srcEl.textContent='● '+source;
 }
 
 // ── Progress + Rotation (combined) ───────────────────

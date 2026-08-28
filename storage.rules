@@ -6,5 +6,9 @@ service firebase.storage {
     match /slips/{fileName} {
       allow read, write: if true;
     }
+    // Friend avatar photos
+    match /avatars/{fileName} {
+      allow read, write: if true;
+    }
   }
 }

@@ -24,6 +24,7 @@ import {
   addDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getMessaging, getToken, isSupported } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 // 🔥 REPLACE THIS BLOCK WITH YOUR FIREBASE CONFIG 🔥
 const firebaseConfig = {
@@ -38,6 +39,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
+const storage = getStorage(app);
 const betsCol     = collection(db, 'bets');
 const friendsCol  = collection(db, 'friends');
 const archiveCol  = collection(db, 'archive'); // completed ladders
@@ -80,6 +82,16 @@ window.db_updateBet   = async (id,d) => updateDoc(doc(db,'bets',id), d);
 window.db_deleteBet   = async id => deleteDoc(doc(db,'bets',id));
 window.db_addFriend   = async n  => addDoc(friendsCol, {name:n});
 window.db_deleteFriend= async id => deleteDoc(doc(db,'friends',id));
+window.db_updateFriend = async (id,d) => updateDoc(doc(db,'friends',id), d);
+// Uploads a friend's avatar photo to Storage and saves the download URL on their friend doc.
+window.db_uploadAvatar = async (friendId, file) => {
+  const path = `avatars/${friendId}-${Date.now()}`;
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, file);
+  const url = await getDownloadURL(fileRef);
+  await updateDoc(doc(db,'friends',friendId), { photoURL: url });
+  return url;
+};
 window.db_saveRotation = async (names) => {
   await setDoc(doc(db,'rotation','order'), { names });
 };
@@ -237,11 +249,15 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .bubble-wrap.bc-next{border-color:var(--text);}
 .bubble-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;color:#fff;flex-shrink:0;transition:all .25s;}
 .bubble-wrap.bc-active .bubble-avatar{width:56px;height:56px;font-size:.95rem;}
+.avatar-photo{object-fit:cover;box-sizing:border-box;}
 .ba-won{background:var(--green);}
 .ba-active{background:var(--gold);color:#1a1400;}
 .ba-lost{background:var(--red);}
 .ba-pending{background:var(--surface2);color:var(--muted);border:2px solid var(--border);}
 .bubble-wrap.bc-next .ba-pending{background:var(--next);color:#fff;border-color:var(--next);}
+.ba-neutral{background:var(--gold-dim);color:#1a1400;}
+.avatar-upload-label{cursor:pointer;position:relative;display:inline-flex;}
+.avatar-upload-label::after{content:'📷';position:absolute;bottom:-2px;right:-2px;font-size:.6rem;background:var(--surface);border-radius:50%;padding:1px 2px;}
 .bubble-amt{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:6px;white-space:nowrap;}
 .bubble-amt.green{color:var(--green);}
 .bubble-amt.gold{color:var(--gold);}
@@ -1737,6 +1753,21 @@ function initials(name){
   const parts=(name||'?').trim().split(/\s+/);
   return parts.length>1 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : (name||'?').slice(0,2).toUpperCase();
 }
+function friendPhoto(name){
+  const f=(window._state?.friends||[]).find(fr=>fr.name.toLowerCase()===(name||'').toLowerCase());
+  return f?.photoURL||'';
+}
+const AVATAR_RING = {'ba-won':'var(--green)','ba-active':'var(--gold)','ba-lost':'var(--red)'};
+// Renders a friend's uploaded photo (with a status-colored ring) if they have one,
+// otherwise falls back to the existing initials-on-colored-circle.
+function avatarHtml(name, avatarClass, styleExtra=''){
+  const photo = friendPhoto(name);
+  if(photo){
+    const ring = AVATAR_RING[avatarClass]||'var(--border)';
+    return `<img src="${esc(photo)}" alt="" class="bubble-avatar avatar-photo" style="border:2px solid ${ring};${styleExtra}">`;
+  }
+  return `<div class="bubble-avatar ${avatarClass}" style="${styleExtra}">${esc(initials(name))}</div>`;
+}
 
 // ── Likelihood to Hit ──────────────────────────────────
 // American odds → implied win probability (0-100)
@@ -1948,7 +1979,7 @@ function renderProgress(){
     else if(status==='active') amtHtml = `<span class="bubble-amt gold">${fmt(s.bet.amount)}</span>`;
     const connector = i>0 ? `<div class="pb-connector ${slots[i-1].bet?.status==='won'?'filled':''}"></div>` : '';
     return `${connector}<div class="bubble-wrap ${wrapCls}">
-      <div class="bubble-avatar ${avatarCls}">${esc(initials(s.name))}</div>
+      ${avatarHtml(s.name, avatarCls)}
       ${amtHtml}
       <div class="bubble-name">${esc(s.name)}</div>
       <div class="bubble-rung">R${i+1}</div>
@@ -2041,7 +2072,7 @@ function activeBetCardHTML(bet, i){
     <div class="rung-card c-prominent ${bet.status==='active'?'c-active':''}" id="card-${bet.id}">
       <div class="abc-header">
         <div class="abc-who">
-          <div class="bubble-avatar ${avatarCls}" style="width:44px;height:44px;font-size:.8rem;">${esc(initials(bet.person))}</div>
+          ${avatarHtml(bet.person, avatarCls, 'width:44px;height:44px;font-size:.8rem;')}
           <div>
             <div class="abc-name">${esc(bet.person||'Unknown')}</div>
             ${bet.desc?`<div class="abc-desc">${esc(bet.desc)}</div>`:''}
@@ -2853,8 +2884,26 @@ function openFriendsModal(){ renderFriendsList(); document.getElementById('frien
 function renderAdminFriends(){
   const el=document.getElementById('admin-friends-list'); if(!el) return;
   const f=window._state?.friends||[];
-  el.innerHTML=f.length?f.map(fr=>`<div class="friend-row"><div>${esc(fr.name)}</div><button class="btn btn-danger btn-sm" onclick="removeFriend('${fr.id}')">Remove</button></div>`).join('')
+  el.innerHTML=f.length?f.map(fr=>`
+    <div class="friend-row">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label class="avatar-upload-label" title="Click to change photo">
+          ${avatarHtml(fr.name, 'ba-neutral', 'width:34px;height:34px;font-size:.68rem;')}
+          <input type="file" accept="image/*" style="display:none;" onchange="uploadFriendAvatar('${fr.id}',this)">
+        </label>
+        <div>${esc(fr.name)}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removeFriend('${fr.id}')">Remove</button>
+    </div>`).join('')
     :'<div style="color:var(--muted);font-size:.84rem;margin-bottom:.5rem;">No friends added yet.</div>';
+}
+async function uploadFriendAvatar(friendId, inputEl){
+  const file = inputEl.files?.[0]; if(!file) return;
+  if(!file.type.startsWith('image/')){ alert('Please pick an image file.'); inputEl.value=''; return; }
+  if(file.size > 5*1024*1024){ alert('Please pick an image under 5MB.'); inputEl.value=''; return; }
+  try{ await window.db_uploadAvatar(friendId, file); }
+  catch(e){ alert('Upload failed — try again.'); }
+  inputEl.value='';
 }
 async function addFriendAdmin(){
   const inp=document.getElementById('admin-new-friend'); const name=inp.value.trim(); if(!name) return;

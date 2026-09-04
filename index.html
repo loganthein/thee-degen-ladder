@@ -1842,12 +1842,19 @@ function marketImpliedProb(oddsEvents, leg, family){
   });
   if(!ev) return null;
   const favorsHome = pickFavorsHome(leg.pick, {homeTeam:leg.game.homeTeam,homeFullName:leg.game.homeFullName,homeLocation:leg.game.homeLocation,awayTeam:leg.game.awayTeam,awayFullName:leg.game.awayFullName,awayLocation:leg.game.awayLocation}, leg.game);
+  const p=(leg.pick||'').toLowerCase();
+  const isOver = /\bover\b/.test(p), isUnder = /\bunder\b/.test(p);
   const prices=[];
   (ev.bookmakers||[]).forEach(bk=>{
  const m=(bk.markets||[]).find(mk=>mk.key===family); if(!m) return;
- const outcome = family==='h2h'
-      ? m.outcomes?.find(o=>favorsHome ? o.name===ev.home_team : o.name===ev.away_team)
-      : m.outcomes?.[0]; // spreads/totals: first line as a reasonable proxy
+    // Match the actual picked side — grabbing outcomes[0] blindly can pull the
+    // opposite team/side and show an inverted (e.g. 10% instead of 90%) probability.
+ let outcome;
+ if(family==='totals'){
+ outcome = m.outcomes?.find(o=>isOver ? /over/i.test(o.name) : isUnder ? /under/i.test(o.name) : false);
+ } else {
+ outcome = m.outcomes?.find(o=>favorsHome ? o.name===ev.home_team : o.name===ev.away_team);
+ }
  if(outcome && typeof outcome.price==='number') prices.push(outcome.price);
   });
   if(!prices.length) return null;
@@ -2594,10 +2601,24 @@ function espnLogoChip(league, teamId){
   return url ? `<div class="sw-logo-chip"><img src="${url}" alt="" onerror="this.parentElement.remove()"></div>` : '';
 }
 
+// Auto-promotes a pending bet to 'active' the moment its linked game goes live, and
+// notifies the group. Guarded by _autoPromoted so a bet already caught mid-refresh
+// doesn't fire the update/notification more than once per page load.
+const _autoPromoted = new Set();
+function maybeAutoGoLive(betId, live){
+  if(!live || _autoPromoted.has(betId)) return;
+  const bet = (window._state?.bets||[]).find(b=>b.id===betId);
+  if(!bet || bet.status!=='pending') return;
+  _autoPromoted.add(betId);
+  setActive(betId);
+  maybeNotify('Game is live', `${bet.person}'s bet — ${bet.desc||'Bet'} — the game just started.`);
+}
+
 function applyScoreToEl(el, betId, li, leg, s){
   if(!el) return;
   const hw=parseInt(s.homeScore)>parseInt(s.awayScore), aw=!hw&&parseInt(s.awayScore)>parseInt(s.homeScore);
   const live=s.statusName==='STATUS_IN_PROGRESS'||s.statusName==='STATUS_HALFTIME', fin=s.statusName==='STATUS_FINAL';
+  maybeAutoGoLive(betId, live);
   const sCls=live?'live':fin?'final':'upcoming', sTxt=live?(s.statusName==='STATUS_HALFTIME'?'HALFTIME':'LIVE'):fin?'FINAL':'UPCOMING';
   // Detect player props: explicit type OR pick text matches a player in box score
   let bs, isProp=false;
@@ -2665,11 +2686,12 @@ function refreshAll(betId){
   const bet=(window._state?.bets||[]).find(b=>b.id===betId); if(!bet?.legs) return;
   bet.legs.forEach((l,li)=>{ if(l.game){ const el=document.getElementById(`score-${betId}-${li}`); if(el) el.innerHTML='<span class="sw-loading">Refreshing...</span>'; loadScore(betId,li,l); } });
 }
-// Silently re-fetch scores for whatever bet is currently live, every 60s.
-// No-op (and effectively stops) once that bet is no longer 'active'.
+// Silently re-fetch scores for whatever bet is currently live or still pending, every 60s.
+// Pending bets are included so a linked game going live gets caught (and auto-promoted,
+// see maybeAutoGoLive) even if nobody has tapped "Set Live" yet. No-op once a bet settles.
 setInterval(()=>{
   (window._state?.bets||[]).forEach(b=>{
- if(b.status!=='active') return;
+ if(b.status!=='active' && b.status!=='pending') return;
     (b.legs||[]).forEach((leg,li)=>{
  if(!leg.game) return;
  delete _scoreCache[leg.game.espnId];

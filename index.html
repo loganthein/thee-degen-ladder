@@ -26,7 +26,7 @@ import {
 import { getMessaging, getToken, isSupported } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
-// 🔥 REPLACE THIS BLOCK WITH YOUR FIREBASE CONFIG 🔥
+//  REPLACE THIS BLOCK WITH YOUR FIREBASE CONFIG 
 const firebaseConfig = {
   apiKey: "AIzaSyBs-HJz0s9dMcauLPT7H5OPB1k9Ax3vtA0",
   authDomain: "thee-degen-ladder.firebaseapp.com",
@@ -35,7 +35,7 @@ const firebaseConfig = {
   messagingSenderId: "27262663189",
   appId: "1:27262663189:web:5cfbe84bd81435e5122c1c"
 };
-// 🔥 END CONFIG 🔥
+//  END CONFIG 
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
@@ -50,7 +50,7 @@ const tokensCol    = collection(db, 'pushTokens'); // push notification tokens
 window._state = { bets: [], friends: [], archive: [], rotation: [], reactions: {}, settings: {} };
 window._db = db;
 
-onSnapshot(query(betsCol,    orderBy('createdAt','asc')), snap => {
+onSnapshot(query(betsCol, orderBy('createdAt','asc')), snap => {
   window._state.bets    = snap.docs.map(d => ({id:d.id,...d.data()}));
   window.render && window.render();
 });
@@ -109,10 +109,10 @@ window.db_savePushToken = async (token) => {
 // messaging isn't supported (e.g. Safari without proper setup) or the token request fails.
 window.getFcmToken = async (vapidKey) => {
   try {
-    if(!(await isSupported())) return null;
-    const reg = await navigator.serviceWorker.ready;
-    const messaging = getMessaging(app);
-    return await getToken(messaging, { vapidKey, serviceWorkerRegistration: reg });
+ if(!(await isSupported())) return null;
+ const reg = await navigator.serviceWorker.ready;
+ const messaging = getMessaging(app);
+ return await getToken(messaging, { vapidKey, serviceWorkerRegistration: reg });
   } catch(e){ console.error('FCM token error', e); return null; }
 };
 window.db_saveSettings  = async (data) => {
@@ -131,13 +131,13 @@ window.db_archiveLadder = async (bets, outcome) => {
   // On a win, the opener (rung 1) moves to the end — everyone else already climbed.
   // On a loss, the person who lost moves to the end — they get to sit out a round.
   if(bets.length > 0){
-    const pivotPerson = result==='won' ? bets[0].person : bets[bets.length-1].person;
-    const rot = window._state?.rotation||[];
-    if(rot.length > 1){
-      const idx = rot.findIndex(n => n.toLowerCase() === pivotPerson.toLowerCase());
-      if(idx >= 0){
-        const newRot = [...rot.slice(idx+1), ...rot.slice(0, idx+1)];
-        await setDoc(doc(db,'rotation','order'), { names: newRot });
+ const pivotPerson = result==='won' ? bets[0].person : bets[bets.length-1].person;
+ const rot = window._state?.rotation||[];
+ if(rot.length > 1){
+ const idx = rot.findIndex(n => n.toLowerCase() === pivotPerson.toLowerCase());
+ if(idx >= 0){
+ const newRot = [...rot.slice(idx+1), ...rot.slice(0, idx+1)];
+ await setDoc(doc(db,'rotation','order'), { names: newRot });
       }
     }
   }
@@ -257,7 +257,7 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .bubble-wrap.bc-next .ba-pending{background:var(--next);color:#fff;border-color:var(--next);}
 .ba-neutral{background:var(--gold-dim);color:#1a1400;}
 .avatar-upload-label{cursor:pointer;position:relative;display:inline-flex;}
-.avatar-upload-label::after{content:'📷';position:absolute;bottom:-2px;right:-2px;font-size:.6rem;background:var(--surface);border-radius:50%;padding:1px 2px;}
+.avatar-upload-label::after{content:'';position:absolute;bottom:-2px;right:-2px;font-size:.6rem;background:var(--surface);border-radius:50%;padding:1px 2px;}
 .bubble-amt{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:6px;white-space:nowrap;}
 .bubble-amt.green{color:var(--green);}
 .bubble-amt.gold{color:var(--gold);}
@@ -268,10 +268,10 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .pb-footer span{color:var(--gold);}
 
 /* ── STATS BAR ── */
-.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;margin-bottom:1.5rem;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.4rem 1.6rem;box-shadow:var(--card-shadow);position:relative;overflow:hidden;transition:border-color .2s;}
-.stat-label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
-.stat-value{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;letter-spacing:1px;line-height:1;}
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--card-shadow);margin-bottom:1rem;}
+.stat-card{background:var(--surface);border:0;border-radius:0;padding:.75rem .95rem;position:relative;overflow:hidden;}
+.stat-label{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.stat-value{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:.5px;line-height:1;}
 .sv-gold{color:var(--gold);}
 .sv-green{color:var(--green);}
 .sv-red{color:var(--red);}
@@ -309,9 +309,9 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 /* ── LEGS ── */
 .legs-wrap{margin-top:9px;}
 .legs-lbl{font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
-.leg{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;margin-bottom:5px;transition:border-color .2s,background .2s;}
-.leg.lh{border-color:var(--border-green);background:var(--surface-green);}
-.leg.lp{border-color:var(--border-purple);}
+.leg{background:transparent;border:0;border-radius:0;padding:0;margin-bottom:7px;transition:border-color .2s;}
+.leg.lh{border-left:2px solid var(--green);padding-left:8px;}
+.leg.lp{border-left:2px solid #9b59b6;padding-left:8px;}
 .leg-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .leg-name{font-size:.84rem;font-weight:600;}
 .leg-pick{font-size:.78rem;color:var(--muted);margin-top:2px;}
@@ -320,8 +320,8 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .ltag-prop{background:var(--surface-purple);color:#b57bee;border:1px solid var(--border-purple);}
 
 /* ── SCORE WIDGET ── */
-.score-w{margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;transition:border-color .2s,background .2s;}
-.score-w.sh{border-color:var(--green);background:var(--surface);}
+.score-w{margin-top:6px;background:transparent;border:0;border-top:1px solid var(--border);border-radius:0;padding:7px 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.score-w.sh{border-top-color:var(--green);}
 .sw-teams{display:flex;align-items:center;gap:11px;}
 .sw-team{display:flex;flex-direction:column;align-items:center;min-width:44px;text-align:center;}
 .sw-logo-chip{width:28px;height:28px;border-radius:50%;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin-bottom:4px;overflow:hidden;}
@@ -352,7 +352,7 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .rung-actions{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;}
 
 /* ── ACTIVE BET CARD ── */
-.rung-card.c-prominent{padding:1.3rem 1.5rem;margin:0 0 1.2rem;box-shadow:0 4px 20px rgba(0,0,0,.12),var(--card-shadow);}
+.rung-card.c-prominent{padding:.95rem 1.1rem;margin:0 0 .9rem;box-shadow:var(--card-shadow);}
 .abc-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
 .abc-who{display:flex;align-items:center;gap:12px;}
 .abc-name{font-weight:700;font-size:1.05rem;}
@@ -361,9 +361,9 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .abc-badge.live{color:var(--red);border:1px solid var(--border-red);background:var(--surface-red);}
 .abc-badge.pending{color:var(--muted);border:1px solid var(--border);background:var(--surface2);}
 /* Split panel: left = live score/pace, right = staked/odds/to-win */
-.abc-body{display:grid;grid-template-columns:1fr 200px;gap:14px;align-items:start;}
+.abc-body{display:block;}
 .abc-left .legs-wrap{margin-top:0;}
-.abc-right{display:flex;flex-direction:column;gap:.7rem;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.9rem 1.1rem;}
+.abc-right{display:flex;flex-direction:row;gap:1.8rem;background:transparent;border:0;border-top:1px solid var(--border);border-radius:0;padding:.65rem 0 0;margin-top:.65rem;}
 .abc-stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.9rem 1.1rem;margin-top:10px;}
 
 /* ── ORDER TOGGLE ── */
@@ -667,7 +667,6 @@ textarea{resize:vertical;min-height:56px;}
 .streak-pill.best{background:var(--surface-green);border-color:var(--border-green);color:var(--green);}
 
 /* ── EMOJI REACTIONS ── */
-.reactions-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
 .reaction-btn{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:.82rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;}
 .reaction-btn:hover{border-color:var(--gold);transform:scale(1.1);}
 .reaction-btn.reacted{background:var(--surface-gold);border-color:var(--border-gold);}
@@ -696,20 +695,20 @@ textarea{resize:vertical;min-height:56px;}
   .sync-pill{display:none;}
   .container{padding:.8rem;}
   /* Stats */
-  .stats-bar{grid-template-columns:1fr 1fr;gap:.6rem;}
-  .stat-card{padding:.8rem 1rem;}
-  .stat-value{font-size:1.5rem;}
-  .stat-label{font-size:.6rem;}
+  .stats-bar{grid-template-columns:1fr 1fr;gap:1px;}
+  .stat-card{padding:.6rem .8rem;}
+  .stat-value{font-size:1.15rem;}
+  .stat-label{font-size:.55rem;}
   /* Progress bubbles — horizontally scrollable on mobile */
-  .progress-block{padding:.8rem .8rem;}
+  .progress-block{padding:.7rem .75rem;}
   .bubble-wrap{min-width:64px;padding:6px 8px;}
   .bubble-wrap.bc-active{padding:8px 10px;}
-  .bubble-avatar{width:38px;height:38px;font-size:.72rem;}
-  .bubble-wrap.bc-active .bubble-avatar{width:48px;height:48px;font-size:.82rem;}
+  .bubble-avatar{width:32px;height:32px;font-size:.66rem;}
+  .bubble-wrap.bc-active .bubble-avatar{width:40px;height:40px;font-size:.74rem;}
   .bubble-name{font-size:.7rem;max-width:60px;}
   .bubble-amt{font-size:.6rem;}
   /* Cards */
-  .rung-card{padding:.8rem .9rem;}
+  .rung-card{padding:.7rem .8rem;}
   .rung-details{gap:.8rem;}
   .rung-num{font-size:.58rem;}
   .rung-actions{gap:5px;}
@@ -755,9 +754,9 @@ textarea{resize:vertical;min-height:56px;}
   <div class="header-actions">
     <div class="sync-pill"><div class="sync-dot" id="sync-dot"></div><span id="sync-lbl">Live</span></div>
     <div class="theme-toggle">
-      <button class="theme-btn active" id="theme-dark"  onclick="setTheme('dark')">Dark</button>
-      <button class="theme-btn"        id="theme-dim"   onclick="setTheme('dim')">Dim</button>
-      <button class="theme-btn"        id="theme-light" onclick="setTheme('light')">Light</button>
+      <button class="theme-btn active" id="theme-dark"onclick="setTheme('dark')">Dark</button>
+      <button class="theme-btn"id="theme-dim"onclick="setTheme('dim')">Dim</button>
+      <button class="theme-btn"id="theme-light" onclick="setTheme('light')">Light</button>
     </div>
     <button class="btn btn-primary" onclick="openAddBetModal()">+ Add Bet</button>
   </div>
@@ -767,9 +766,9 @@ textarea{resize:vertical;min-height:56px;}
 
   <!-- SETUP BANNER -->
   <div class="setup-banner" id="setup-banner">
-    <h3>⚙️ Firebase Setup Required</h3>
+    <h3>⚙ Firebase Setup Required</h3>
     <p>Open <code>bet-ladder.html</code> and replace the placeholder values in the <code>firebaseConfig</code> block near the top with your real Firebase credentials.<br>
-    Get them from: <strong>Firebase Console → Project Settings → Your Apps → Web App → SDK Setup</strong></p>
+ Get them from: <strong>Firebase Console → Project Settings → Your Apps → Web App → SDK Setup</strong></p>
   </div>
 
   <!-- TAB BAR -->
@@ -797,12 +796,12 @@ textarea{resize:vertical;min-height:56px;}
 
     <!-- WIN BANNER -->
     <div class="win-banner" id="win-banner">
-      <div class="win-emoji">🏆</div>
+      <div class="win-emoji"></div>
       <div class="win-title">LADDER COMPLETE!</div>
       <div class="win-sub" id="win-sub-rungs">All rungs cleared — cash it out!</div>
       <div class="win-amount" id="win-amount">$0.00</div>
       <div class="win-actions">
-        <button class="btn btn-green" onclick="startNewLadder()">🔄 Start New Ladder</button>
+        <button class="btn btn-green" onclick="startNewLadder()"> Start New Ladder</button>
         <button class="btn btn-ghost" onclick="dismissWin()">Dismiss</button>
       </div>
     </div>
@@ -881,8 +880,8 @@ textarea{resize:vertical;min-height:56px;}
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
       <p style="font-size:.84rem;color:var(--muted);margin-bottom:1.2rem;line-height:1.6;">These actions affect the whole group.</p>
       <div style="display:flex;flex-direction:column;gap:.8rem;">
-        <button class="btn btn-green" style="text-align:left;" onclick="startNewLadder()">🚀 Start New Ladder — archive current &amp; reset to $20</button>
-        <button class="btn btn-danger" style="text-align:left;" id="end-ladder-btn" onclick="openEndLadderModal()">⛔ End Ladder — mark as failed &amp; archive</button>
+        <button class="btn btn-green" style="text-align:left;" onclick="startNewLadder()"> Start New Ladder — archive current &amp; reset to $20</button>
+        <button class="btn btn-danger" style="text-align:left;" id="end-ladder-btn" onclick="openEndLadderModal()"> End Ladder — mark as failed &amp; archive</button>
       </div>
     </div>
 
@@ -894,7 +893,7 @@ textarea{resize:vertical;min-height:56px;}
         <button class="btn btn-primary" onclick="addFriendAdmin()">Add</button>
       </div>
       <div class="rotation-editor" style="margin-top:1.2rem;">
-        <div class="re-label">🔄 Betting Order</div>
+        <div class="re-label"> Betting Order</div>
         <div class="re-list" id="re-list"></div>
         <div class="re-hint">Use arrows to set rotation order. Saved automatically.</div>
       </div>
@@ -903,16 +902,16 @@ textarea{resize:vertical;min-height:56px;}
     <div class="section-title" style="margin-top:2rem;">PUSH NOTIFICATIONS</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
       <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
-        Get notified when a bet wins, loses, or the ladder completes — even when the app is closed.
+ Get notified when a bet wins, loses, or the ladder completes — even when the app is closed.
       </p>
       <div id="notif-status" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:1rem;"></div>
-      <button class="btn btn-ghost" id="notif-btn" onclick="requestNotifPermission()">🔔 Enable Notifications on This Device</button>
+      <button class="btn btn-ghost" id="notif-btn" onclick="requestNotifPermission()"> Enable Notifications on This Device</button>
       <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
         <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Backend Setup (required for cross-device push)</div>
         <p style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.8rem;">
-          Paste your Web Push <b>VAPID key</b> below (Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → generate/copy the key pair).
-          This device's real FCM token then saves to Firestore under <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">pushTokens</code>.
-          Deploying the <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">functions/</code> folder (requires the Firebase <b>Blaze</b> billing plan) is what actually sends to those tokens — until deployed, notifications still only fire when someone has the app open.
+ Paste your Web Push <b>VAPID key</b> below (Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → generate/copy the key pair).
+ This device's real FCM token then saves to Firestore under <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">pushTokens</code>.
+ Deploying the <code style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:'DM Mono',monospace;font-size:.72rem;">functions/</code> folder (requires the Firebase <b>Blaze</b> billing plan) is what actually sends to those tokens — until deployed, notifications still only fire when someone has the app open.
         </p>
         <div class="fg" style="margin-bottom:0;">
           <label>VAPID Key</label>
@@ -925,7 +924,7 @@ textarea{resize:vertical;min-height:56px;}
     <div class="section-title" style="margin-top:2rem;">MARKET ODDS</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
       <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
-        Powers the pre-game "Likelihood to Hit" tier — averages DraftKings/FanDuel/BetMGM/Caesars odds for the bet's market. Get a free-tier key at <b>the-odds-api.com</b>. Without a key, the likelihood bar falls back to the odds you entered on the bet itself.
+ Powers the pre-game "Likelihood to Hit" tier — averages DraftKings/FanDuel/BetMGM/Caesars odds for the bet's market. Get a free-tier key at <b>the-odds-api.com</b>. Without a key, the likelihood bar falls back to the odds you entered on the bet itself.
       </p>
       <div class="fg" style="margin-bottom:.8rem;">
         <label>The Odds API Key</label>
@@ -937,7 +936,7 @@ textarea{resize:vertical;min-height:56px;}
     <div class="section-title" style="margin-top:2rem;">AI SETTINGS</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;">
       <p style="font-size:.84rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">
-        Enter your Anthropic API key to enable <b>bet slip scanning</b> for the whole group. Once saved here, anyone can scan their bet slip from any device. Get a key at <b>console.anthropic.com</b>.
+ Enter your Anthropic API key to enable <b>bet slip scanning</b> for the whole group. Once saved here, anyone can scan their bet slip from any device. Get a key at <b>console.anthropic.com</b>.
       </p>
       <div class="fg" style="margin-bottom:.8rem;">
         <label>Anthropic API Key</label>
@@ -961,7 +960,7 @@ textarea{resize:vertical;min-height:56px;}
   <div class="fg">
     <div class="slip-upload-zone" id="slip-zone" onclick="document.getElementById('slip-file').click()">
       <input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">
-      <div class="slip-uz-icon">📷</div>
+      <div class="slip-uz-icon"></div>
       <div class="slip-uz-title">Scan Bet Slip</div>
       <div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div>
     </div>
@@ -978,7 +977,7 @@ textarea{resize:vertical;min-height:56px;}
     <label>Bet Type</label>
     <div class="chips" style="margin-bottom:0;">
       <button class="chip on" id="btype-straight" onclick="setBetType('straight')">Straight</button>
-      <button class="chip" id="btype-parlay"   onclick="setBetType('parlay')">Parlay</button>
+      <button class="chip" id="btype-parlay"onclick="setBetType('parlay')">Parlay</button>
       <button class="chip" id="btype-freeform" onclick="setBetType('freeform')">Free-form</button>
     </div>
   </div>
@@ -1002,7 +1001,7 @@ textarea{resize:vertical;min-height:56px;}
           <div class="chips" id="sport-chips"></div>
           <div class="gsw">
             <input type="text" id="game-search" placeholder="Search by team..." autocomplete="off"
-              oninput="debounceSearch(this.value)" onfocus="onSearchFocus()">
+ oninput="debounceSearch(this.value)" onfocus="onSearchFocus()">
             <div class="gresults" id="game-results"></div>
           </div>
           <div class="search-hint" id="search-hint-lbl">Searches ESPN schedule for selected date.</div>
@@ -1015,7 +1014,7 @@ textarea{resize:vertical;min-height:56px;}
             <div class="fg" style="margin:0;position:relative;">
               <label>Player Name</label>
               <input type="text" id="prop-player" placeholder="e.g. LeBron James" autocomplete="off"
-                oninput="propPlayerId=null;filterPropRoster(this.value);updatePropAutoPick()" onfocus="filterPropRoster(this.value)">
+ oninput="propPlayerId=null;filterPropRoster(this.value);updatePropAutoPick()" onfocus="filterPropRoster(this.value)">
               <div class="gresults" id="prop-player-results" style="display:none;"></div>
             </div>
             <div class="fg" style="margin:0;"><label>Prop Type</label>
@@ -1070,9 +1069,9 @@ textarea{resize:vertical;min-height:56px;}
   <div class="modal-title">RECORD OUTCOME</div>
   <div id="outcome-summary" style="font-size:.88rem;color:var(--muted);margin-bottom:1rem;"></div>
   <div class="outcome-btns">
-    <button class="ob win"  onclick="recordOutcome('won')">🏆 WIN</button>
-    <button class="ob loss" onclick="recordOutcome('lost')">💀 LOSS</button>
-    <button class="ob push" onclick="recordOutcome('push')">🤝 PUSH</button>
+    <button class="ob win"onclick="recordOutcome('won')"> WIN</button>
+    <button class="ob loss" onclick="recordOutcome('lost')"> LOSS</button>
+    <button class="ob push" onclick="recordOutcome('push')"> PUSH</button>
   </div>
   <div style="margin-top:1.4rem;">
     <div class="fg"><label>Actual Payout ($)</label><input type="number" id="outcome-payout" placeholder="0.00" min="0" step="0.01"></div>
@@ -1119,7 +1118,7 @@ textarea{resize:vertical;min-height:56px;}
   </div>
   <!-- ROTATION ORDER EDITOR -->
   <div class="rotation-editor">
-    <div class="re-label">🔄 Betting Order (drag to reorder)</div>
+    <div class="re-label"> Betting Order (drag to reorder)</div>
     <div class="re-list" id="re-list"></div>
     <div class="re-hint">Drag names up/down to set the rotation. Saved automatically.</div>
   </div>
@@ -1132,8 +1131,8 @@ textarea{resize:vertical;min-height:56px;}
 <div class="modal" style="max-width:420px;text-align:center;">
   <div class="modal-title" style="margin-bottom:.5rem;">START NEW LADDER?</div>
   <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.4rem;line-height:1.6;">
-    This will archive the current ladder and clear all bets so you can start fresh from $20.<br>
-    Your history and leaderboard stats are preserved.
+ This will archive the current ladder and clear all bets so you can start fresh from $20.<br>
+ Your history and leaderboard stats are preserved.
   </p>
   <div style="display:flex;gap:12px;justify-content:center;">
     <button class="btn btn-ghost" onclick="closeModal('newladder-modal')">Cancel</button>
@@ -1157,7 +1156,7 @@ textarea{resize:vertical;min-height:56px;}
 <div class="modal" style="max-width:440px;">
   <div class="modal-title">END LADDER</div>
   <p style="color:var(--muted);font-size:.88rem;margin-bottom:1.2rem;line-height:1.6;">
-    Mark this ladder as failed and archive it. The next person in the rotation will start a new ladder from $20.
+ Mark this ladder as failed and archive it. The next person in the rotation will start a new ladder from $20.
   </p>
   <div class="fg">
     <label>Which rung did it fail on?</label>
@@ -1169,7 +1168,7 @@ textarea{resize:vertical;min-height:56px;}
   </div>
   <div class="mactions">
     <button class="btn btn-ghost" onclick="closeModal('end-ladder-modal')">Cancel</button>
-    <button class="btn btn-danger" onclick="confirmEndLadder()">⛔ End &amp; Archive</button>
+    <button class="btn btn-danger" onclick="confirmEndLadder()"> End &amp; Archive</button>
   </div>
 </div>
 </div>
@@ -1195,12 +1194,12 @@ let searchTimer     = null;
 
 const SPORTS = [
   {label:'NBA',  sport:'basketball', league:'nba'},
-  {label:'NFL',  sport:'football',   league:'nfl'},
-  {label:'MLB',  sport:'baseball',   league:'mlb'},
-  {label:'NHL',  sport:'hockey',     league:'nhl'},
+  {label:'NFL',  sport:'football', league:'nfl'},
+  {label:'MLB',  sport:'baseball', league:'mlb'},
+  {label:'NHL',  sport:'hockey', league:'nhl'},
   {label:'NCAAB',sport:'basketball', league:'mens-college-basketball'},
-  {label:'NCAAF',sport:'football',   league:'college-football'},
-  {label:'MLS',  sport:'soccer',     league:'usa.1'},
+  {label:'NCAAF',sport:'football', league:'college-football'},
+  {label:'MLS',  sport:'soccer', league:'usa.1'},
 ];
 
 // ════════════════════════════════════════════════════════
@@ -1208,10 +1207,10 @@ const SPORTS = [
 // ════════════════════════════════════════════════════════
 setTimeout(() => {
   if (!window._db) {
-    document.getElementById('setup-banner').classList.add('show');
-    document.getElementById('sync-dot').classList.add('off');
-    document.getElementById('sync-lbl').textContent = 'Offline';
-    document.getElementById('active-bet-wrap').innerHTML =
+ document.getElementById('setup-banner').classList.add('show');
+ document.getElementById('sync-dot').classList.add('off');
+ document.getElementById('sync-lbl').textContent = 'Offline';
+ document.getElementById('active-bet-wrap').innerHTML =
       '<div class="empty"><div class="big">⚙</div><p>Add your Firebase config to get started.</p></div>';
   }
 }, 2000);
@@ -1240,85 +1239,85 @@ async function getBoard(sport,league,dateStr){
   // Fire two requests in parallel — one with groups (broad D1 filter) and one without —
   // then merge & deduplicate by event ID so we catch every game.
   if(league==='mens-college-basketball'){
-    const urls=[
+ const urls=[
       `${ESPN}/${sport}/${league}/scoreboard?groups=50&limit=300&dates=${d}`,
       `${ESPN}/${sport}/${league}/scoreboard?dates=${d}&limit=300`
     ];
-    const results = await Promise.allSettled(urls.map(u=>fetchFallback(u)));
-    const ev1 = results[0].status==='fulfilled'?(results[0].value.events||[]):[];
-    const ev2 = results[1].status==='fulfilled'?(results[1].value.events||[]):[];
-    const seen = new Set(ev1.map(e=>e.id));
-    return { events:[...ev1,...ev2.filter(e=>!seen.has(e.id))] };
+ const results = await Promise.allSettled(urls.map(u=>fetchFallback(u)));
+ const ev1 = results[0].status==='fulfilled'?(results[0].value.events||[]):[];
+ const ev2 = results[1].status==='fulfilled'?(results[1].value.events||[]):[];
+ const seen = new Set(ev1.map(e=>e.id));
+ return { events:[...ev1,...ev2.filter(e=>!seen.has(e.id))] };
   }
   const base = league==='college-football'?`?groups=80&limit=300&dates=${d}`:`?dates=${d}&limit=100`;
   return fetchFallback(`${ESPN}/${sport}/${league}/scoreboard${base}`);
 }
 async function getLiveScore(espnId,sport,league){
   try {
-    const d = await fetchFallback(`${ESPN}/${sport}/${league}/summary?event=${espnId}`);
-    const comp = d.header?.competitions?.[0]; if(!comp) return null;
-    const cs = comp.competitors||[];
-    const home = cs.find(c=>c.homeAway==='home'), away = cs.find(c=>c.homeAway==='away');
+ const d = await fetchFallback(`${ESPN}/${sport}/${league}/summary?event=${espnId}`);
+ const comp = d.header?.competitions?.[0]; if(!comp) return null;
+ const cs = comp.competitors||[];
+ const home = cs.find(c=>c.homeAway==='home'), away = cs.find(c=>c.homeAway==='away');
     // Extract individual player stats from box score for player prop tracking
-    const playerStats = {};
+ const playerStats = {};
     (d.boxscore?.players||[]).forEach(teamData => {
       (teamData.statistics||[]).forEach(sg => {
-        const names = sg.names||[];
+ const names = sg.names||[];
         (sg.athletes||[]).forEach(a => {
-          const name = (a.athlete?.displayName||'').toLowerCase();
-          if(!name) return;
-          const stats = a.stats||[];
-          const get = k => { const i=names.indexOf(k); return i>=0?(parseFloat(stats[i])||0):null; };
-          const row = {
-            pts:get('PTS'), reb:get('REB'), ast:get('AST'), stl:get('STL'), blk:get('BLK'),
-            h:get('H'), hr:get('HR'), k:get('K')??get('SO'), g:get('G')
+ const name = (a.athlete?.displayName||'').toLowerCase();
+ if(!name) return;
+ const stats = a.stats||[];
+ const get = k => { const i=names.indexOf(k); return i>=0?(parseFloat(stats[i])||0):null; };
+ const row = {
+ pts:get('PTS'), reb:get('REB'), ast:get('AST'), stl:get('STL'), blk:get('BLK'),
+ h:get('H'), hr:get('HR'), k:get('K')??get('SO'), g:get('G')
           };
-          playerStats[name] = row;
-          if(a.athlete?.id) playerStats['id:'+a.athlete.id] = row; // exact-ID lookup, no name-fuzzing
+ playerStats[name] = row;
+ if(a.athlete?.id) playerStats['id:'+a.athlete.id] = row; // exact-ID lookup, no name-fuzzing
         });
       });
     });
     // ESPN publishes live per-play win probability for some sports/games (not guaranteed —
     // e.g. reliably there for NFL/NBA, often absent for MLB/NHL/college). Take the latest entry.
-    let winProb = null;
-    const wpArr = d.winprobability;
-    if(Array.isArray(wpArr) && wpArr.length){
-      const last = wpArr[wpArr.length-1];
-      if(typeof last?.homeWinPercentage === 'number'){
-        const homePct = Math.round(last.homeWinPercentage*100);
-        winProb = { homePct, awayPct: 100-homePct };
+ let winProb = null;
+ const wpArr = d.winprobability;
+ if(Array.isArray(wpArr) && wpArr.length){
+ const last = wpArr[wpArr.length-1];
+ if(typeof last?.homeWinPercentage === 'number'){
+ const homePct = Math.round(last.homeWinPercentage*100);
+ winProb = { homePct, awayPct: 100-homePct };
       }
     }
-    return { homeTeam:home?.team?.abbreviation||'?', homeScore:home?.score??'—',
-             awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
-             homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
-             homeLocation:home?.team?.location||'', awayLocation:away?.team?.location||'',
-             homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
-             winProb,
-             statusName:comp?.status?.type?.name||'',
-             shortDetail:comp?.status?.type?.shortDetail||comp?.status?.type?.description||'',
-             playerStats };
+ return { homeTeam:home?.team?.abbreviation||'?', homeScore:home?.score??'—',
+ awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
+ homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
+ homeLocation:home?.team?.location||'', awayLocation:away?.team?.location||'',
+ homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
+ winProb,
+ statusName:comp?.status?.type?.name||'',
+ shortDetail:comp?.status?.type?.shortDetail||comp?.status?.type?.description||'',
+ playerStats };
   } catch(e){ return null; }
 }
 async function searchGames(q) {
   const sp = SPORTS.find(s=>s.label===activeSport)||SPORTS[0];
   try {
-    const d = await getBoard(sp.sport,sp.league,getSearchDate());
-    return (d.events||[]).filter(e=>{
-      if(!q) return true;
-      const n=(e.name||'').toLowerCase(), sh=(e.shortName||'').toLowerCase();
-      const ts=(e.competitions?.[0]?.competitors||[]).map(c=>(c.team?.displayName||'').toLowerCase()).join(' ');
-      return n.includes(q)||sh.includes(q)||ts.includes(q);
+ const d = await getBoard(sp.sport,sp.league,getSearchDate());
+ return (d.events||[]).filter(e=>{
+ if(!q) return true;
+ const n=(e.name||'').toLowerCase(), sh=(e.shortName||'').toLowerCase();
+ const ts=(e.competitions?.[0]?.competitors||[]).map(c=>(c.team?.displayName||'').toLowerCase()).join(' ');
+ return n.includes(q)||sh.includes(q)||ts.includes(q);
     }).slice(0,10).map(e=>{
-      const comp=e.competitions?.[0], cs=comp?.competitors||[];
-      const home=cs.find(c=>c.homeAway==='home'), away=cs.find(c=>c.homeAway==='away');
-      return { espnId:e.id, sport:sp.sport, league:sp.league, sportLabel:sp.label,
-               name:e.name, shortName:e.shortName,
-               homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
-               awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
-               homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
-               homeScore:home?.score||'—', awayScore:away?.score||'—',
-               statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'', date:e.date };
+ const comp=e.competitions?.[0], cs=comp?.competitors||[];
+ const home=cs.find(c=>c.homeAway==='home'), away=cs.find(c=>c.homeAway==='away');
+ return { espnId:e.id, sport:sp.sport, league:sp.league, sportLabel:sp.label,
+ name:e.name, shortName:e.shortName,
+ homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
+ awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
+ homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
+ homeScore:home?.score||'—', awayScore:away?.score||'—',
+ statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'', date:e.date };
     });
   } catch(e){ return []; }
 }
@@ -1331,14 +1330,14 @@ async function getTeamRoster(sport, league, teamId){
   if(!teamId) return [];
   if(_rosterCache[teamId]) return _rosterCache[teamId];
   try{
-    const d = await fetchFallback(`${ESPN}/${sport}/${league}/teams/${teamId}/roster`);
-    const players = (d.athletes||[]).flatMap(group=>group.items||group.athletes||[group]).filter(a=>a && (a.id||a.athlete?.id));
-    const list = players.map(a=>({
-      id: a.id||a.athlete?.id, name: a.fullName||a.displayName||a.athlete?.displayName||'',
-      pos: a.position?.abbreviation||''
+ const d = await fetchFallback(`${ESPN}/${sport}/${league}/teams/${teamId}/roster`);
+ const players = (d.athletes||[]).flatMap(group=>group.items||group.athletes||[group]).filter(a=>a && (a.id||a.athlete?.id));
+ const list = players.map(a=>({
+ id: a.id||a.athlete?.id, name: a.fullName||a.displayName||a.athlete?.displayName||'',
+ pos: a.position?.abbreviation||''
     })).filter(p=>p.id&&p.name);
     _rosterCache[teamId] = list;
-    return list;
+ return list;
   }catch(e){ return []; }
 }
 async function loadPropRoster(){
@@ -1347,8 +1346,8 @@ async function loadPropRoster(){
   el.innerHTML = '<div class="gitem"><span class="sw-loading">Loading roster...</span></div>';
   el.style.display='block';
   const [homeRoster, awayRoster] = await Promise.all([
-    getTeamRoster(legGame.sport, legGame.league, legGame.homeTeamId),
-    getTeamRoster(legGame.sport, legGame.league, legGame.awayTeamId),
+ getTeamRoster(legGame.sport, legGame.league, legGame.homeTeamId),
+ getTeamRoster(legGame.sport, legGame.league, legGame.awayTeamId),
   ]);
   _propRoster = [
     ...homeRoster.map(p=>({...p, team:legGame.homeTeam})),
@@ -1423,28 +1422,28 @@ function getBetStatus(pick, s, legGame){
 
   // Build rich token lists — pull from both live score response AND stored leg game
   const hTokens = teamTokens(
-    s.homeTeam, s.homeFullName,
-    legGame?.homeLocation || legGame?.homeFullName
+ s.homeTeam, s.homeFullName,
+ legGame?.homeLocation || legGame?.homeFullName
   );
   const aTokens = teamTokens(
-    s.awayTeam, s.awayFullName,
-    legGame?.awayLocation || legGame?.awayFullName
+ s.awayTeam, s.awayFullName,
+ legGame?.awayLocation || legGame?.awayFullName
   );
 
   // Match: pick text contains any token for that team
   // Use word-boundary style: token must appear as whole word or at start
   function matchesTeam(tokens){
-    return tokens.some(tok => {
-      if(!tok) return false;
+ return tokens.some(tok => {
+ if(!tok) return false;
       // exact substring match (handles abbreviations like "YAL" in "YAL -3.5")
-      const idx = p.indexOf(tok);
-      if(idx === -1) return false;
+ const idx = p.indexOf(tok);
+ if(idx === -1) return false;
       // make sure it's a word boundary (not mid-word)
-      const before = idx === 0 ? '' : p[idx-1];
-      const after  = p[idx+tok.length] || '';
-      const bOk = !before || /[\s\-+\(]/.test(before);
-      const aOk = !after  || /[\s\-+\)\d]/.test(after);
-      return bOk && aOk;
+ const before = idx === 0 ? '' : p[idx-1];
+ const after  = p[idx+tok.length] || '';
+ const bOk = !before || /[\s\-+\(]/.test(before);
+ const aOk = !after  || /[\s\-+\)\d]/.test(after);
+ return bOk && aOk;
     });
   }
 
@@ -1455,33 +1454,33 @@ function getBetStatus(pick, s, legGame){
   const ov = p.match(/over[\s]*([\d.]+)/);
   const un = p.match(/under[\s]*([\d.]+)/);
   if(ov||un){
-    const line = parseFloat(ov?.[1]||un?.[1])||0;
-    const isOver = !!ov;
-    if(scheduled || !line) return { type:'total', covering:null, label:`${isOver?'O':'U'} ${line||'?'} · ${tot} pts` };
-    const covering = isOver ? tot >= line : tot < line;
-    let label;
-    if(isOver){
-      label = covering
+ const line = parseFloat(ov?.[1]||un?.[1])||0;
+ const isOver = !!ov;
+ if(scheduled || !line) return { type:'total', covering:null, label:`${isOver?'O':'U'} ${line||'?'} · ${tot} pts` };
+ const covering = isOver ? tot >= line : tot < line;
+ let label;
+ if(isOver){
+ label = covering
         ? `✓ ${tot} pts · over ${line}`
         : `${tot} pts · need ${(line - tot).toFixed(1)} more`;
     } else {
-      label = covering
+ label = covering
         ? `✓ ${tot} pts · ${(line - tot).toFixed(1)} to bust`
         : `✗ ${tot} pts · busted by ${(tot - line).toFixed(1)}`;
     }
-    return { type:'total', covering, line, isOver, label };
+ return { type:'total', covering, line, isOver, label };
   }
 
   // ── Spread (team name + number) ──────────────────────
   if(ph||pa){
     // Extract spread number — look for -N.N or +N.N pattern
-    const sp = p.match(/([+-][\d]+\.?[\d]*)/);
-    const spread = sp ? parseFloat(sp[1]) : 0;
-    if(scheduled) return { type:'spread', covering:null, label: spread>=0?`+${spread}`:String(spread) };
-    const covering = ph ? (hs+spread)>as : (as+spread)>hs;
-    const margin   = ph ? Math.floor((hs+spread)-as) : Math.floor((as+spread)-hs);
-    const sign = margin>0?'+':'';
-    return { type:'spread', covering, label:`${covering?'✓':'✗'} ${sign}${margin}` };
+ const sp = p.match(/([+-][\d]+\.?[\d]*)/);
+ const spread = sp ? parseFloat(sp[1]) : 0;
+ if(scheduled) return { type:'spread', covering:null, label: spread>=0?`+${spread}`:String(spread) };
+ const covering = ph ? (hs+spread)>as : (as+spread)>hs;
+ const margin   = ph ? Math.floor((hs+spread)-as) : Math.floor((as+spread)-hs);
+ const sign = margin>0?'+':'';
+ return { type:'spread', covering, label:`${covering?'✓':'✗'} ${sign}${margin}` };
   }
 
   // ── Moneyline (team name only, no spread) ────────────
@@ -1509,14 +1508,14 @@ function parsePlayerProp(pick){
   const line = parseFloat(m[3]);
   const rest = p.slice(p.indexOf(m[3])+m[3].length).trim();
   let statKey = 'pts';
-  if(/reb|board/.test(rest))          statKey='reb';
-  else if(/ast|assist/.test(rest))    statKey='ast';
-  else if(/stl|steal/.test(rest))     statKey='stl';
-  else if(/blk|block/.test(rest))     statKey='blk';
+  if(/reb|board/.test(rest)) statKey='reb';
+  else if(/ast|assist/.test(rest)) statKey='ast';
+  else if(/stl|steal/.test(rest)) statKey='stl';
+  else if(/blk|block/.test(rest)) statKey='blk';
   else if(/hr|home\s*run/.test(rest)) statKey='hr';
-  else if(/\bh\b|hit/.test(rest))     statKey='h';
+  else if(/\bh\b|hit/.test(rest)) statKey='h';
   else if(/\bk\b|strikeout/.test(rest)) statKey='k';
-  else if(/\bg\b|goal/.test(rest))    statKey='g';
+  else if(/\bg\b|goal/.test(rest)) statKey='g';
   return { playerName, isOver, line, statKey };
 }
 // Returns { type:'prop', covering, playerName, statKey, val, line, isOver, label } or null
@@ -1562,13 +1561,13 @@ async function doSearch(q){
   const res=await searchGames(q.toLowerCase().trim());
   if(!res.length){ el.innerHTML='<div class="gitem"><span class="sw-err">No games on that date — try another sport or date.</span></div>'; return; }
   el.innerHTML=res.map(g=>{
-    const live=g.statusName==='STATUS_IN_PROGRESS'||g.statusName==='STATUS_HALFTIME', fin=g.statusName==='STATUS_FINAL';
-    const sc=(live||fin)?`${g.awayTeam} ${g.awayScore} — ${g.homeTeam} ${g.homeScore}`:'';
-    const gj=JSON.stringify(g).replace(/</g,'\\u003c').replace(/'/g,'&#39;');
-    return `<div class="gitem" onclick='selectGame(${gj})'>
+ const live=g.statusName==='STATUS_IN_PROGRESS'||g.statusName==='STATUS_HALFTIME', fin=g.statusName==='STATUS_FINAL';
+ const sc=(live||fin)?`${g.awayTeam} ${g.awayScore} — ${g.homeTeam} ${g.homeScore}`:'';
+ const gj=JSON.stringify(g).replace(/</g,'\\u003c').replace(/'/g,'&#39;');
+ return `<div class="gitem" onclick='selectGame(${gj})'>
       <div class="gi-name">${esc(g.name)}</div>
       <div class="gi-meta">${g.sportLabel} · ${g.shortDetail||new Date(g.date).toLocaleDateString()}</div>
-      ${sc?`<div class="gi-score">${sc}</div>`:''}
+ ${sc?`<div class="gi-score">${sc}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -1577,7 +1576,7 @@ function selectGame(g){
   renderSelGame(); renderMarketSelector();
   if(currentLegType==='prop'){ renderPropTypeOptions(); loadPropRoster(); }
 }
-function renderSelGame(){ const el=document.getElementById('leg-sel-game'); if(!el) return; el.innerHTML=legGame?`<div class="sel-tag">📡 ${esc(legGame.name)}<button onclick="legGame=null;renderSelGame();renderMarketSelector();_propRoster=[];filterPropRoster('');">✕</button></div>`:''; }
+function renderSelGame(){ const el=document.getElementById('leg-sel-game'); if(!el) return; el.innerHTML=legGame?`<div class="sel-tag"> ${esc(legGame.name)}<button onclick="legGame=null;renderSelGame();renderMarketSelector();_propRoster=[];filterPropRoster('');">✕</button></div>`:''; }
 
 // ════════════════════════════════════════════════════════
 // STRUCTURED PICK TYPES — sport-aware markets per league
@@ -1618,15 +1617,15 @@ function renderMarketForm(){
   const isML = currentMarket.k==='ml'||currentMarket.k==='f5ml';
   let html='<div class="chips" style="margin-top:6px;">';
   if(isTotal){
-    html+=`<button class="chip ou-chip" data-v="Over" onclick="setMarketOU('Over')">Over</button>
+ html+=`<button class="chip ou-chip" data-v="Over" onclick="setMarketOU('Over')">Over</button>
            <button class="chip ou-chip" data-v="Under" onclick="setMarketOU('Under')">Under</button>`;
   } else {
-    html+=`<button class="chip team-chip" data-v="away" onclick="setMarketTeam('away')">${esc(legGame.awayFullName||legGame.awayTeam)}</button>
+ html+=`<button class="chip team-chip" data-v="away" onclick="setMarketTeam('away')">${esc(legGame.awayFullName||legGame.awayTeam)}</button>
            <button class="chip team-chip" data-v="home" onclick="setMarketTeam('home')">${esc(legGame.homeFullName||legGame.homeTeam)}</button>`;
   }
   html+='</div>';
   if(!isML){
-    html+=`<input type="text" id="market-line" placeholder="Line, e.g. ${isTotal?'7.5':'-1.5'}" value="${esc(marketLine)}" oninput="setMarketLine(this.value)" style="margin-top:6px;width:100%;">`;
+ html+=`<input type="text" id="market-line" placeholder="Line, e.g. ${isTotal?'7.5':'-1.5'}" value="${esc(marketLine)}" oninput="setMarketLine(this.value)" style="margin-top:6px;width:100%;">`;
   }
   el.innerHTML=html;
   syncMarketChipClasses();
@@ -1646,17 +1645,17 @@ function updateAutoPick(){
   const line = (marketLine||'').trim();
   let pick='';
   if(currentMarket.k==='ml'){
-    pick = `${teamAbbr} ML`;
+ pick = `${teamAbbr} ML`;
   } else if(currentMarket.k==='f5ml'){
-    pick = `${teamAbbr} F5 ML`;
+ pick = `${teamAbbr} F5 ML`;
   } else if(currentMarket.k.includes('total')){
-    const n = parseFloat(line);
-    pick = [currentMarket.period, marketOU, isNaN(n)?'':n].filter(v=>v!==''&&v!=null).join(' ');
+ const n = parseFloat(line);
+ pick = [currentMarket.period, marketOU, isNaN(n)?'':n].filter(v=>v!==''&&v!=null).join(' ');
   } else {
-    const n = parseFloat(line);
-    const signed = isNaN(n) ? '' : (n>=0?`+${n}`:`${n}`);
-    const tag = currentMarket.suffix?`(${currentMarket.suffix})`:currentMarket.period?`(${currentMarket.period})`:'';
-    pick = [teamAbbr, signed, tag].filter(Boolean).join(' ');
+ const n = parseFloat(line);
+ const signed = isNaN(n) ? '' : (n>=0?`+${n}`:`${n}`);
+ const tag = currentMarket.suffix?`(${currentMarket.suffix})`:currentMarket.period?`(${currentMarket.period})`:'';
+ pick = [teamAbbr, signed, tag].filter(Boolean).join(' ');
   }
   pickEl.value = pick;
 }
@@ -1691,13 +1690,13 @@ function addLeg(){
   const leg={id:uid(),type:currentLegType,pick};
   if(currentLegType==='game'){ if(legGame) leg.game=legGame; if(currentMarket) leg.market=currentMarket.k; }
   else {
-    const player=document.getElementById('prop-player')?.value.trim()||'';
-    if(!player){ alert('Enter the player name.'); return; }
-    leg.player=player; leg.propType=document.getElementById('prop-type')?.value||'';
-    leg.line=document.getElementById('prop-line')?.value.trim()||'';
-    leg.gameContext=document.getElementById('prop-ctx')?.value.trim()||'';
-    if(legGame) leg.game=legGame;
-    if(propPlayerId) leg.playerId=propPlayerId; // exact ESPN ID match, no name-fuzzing
+ const player=document.getElementById('prop-player')?.value.trim()||'';
+ if(!player){ alert('Enter the player name.'); return; }
+ leg.player=player; leg.propType=document.getElementById('prop-type')?.value||'';
+ leg.line=document.getElementById('prop-line')?.value.trim()||'';
+ leg.gameContext=document.getElementById('prop-ctx')?.value.trim()||'';
+ if(legGame) leg.game=legGame;
+ if(propPlayerId) leg.playerId=propPlayerId; // exact ESPN ID match, no name-fuzzing
   }
   builtLegs.push(leg);
   ['leg-pick','prop-player','prop-line','prop-ctx'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
@@ -1709,7 +1708,7 @@ function renderBuiltLegs(){
   el.innerHTML=builtLegs.map((l,i)=>`
     <div class="built-leg">
       <div class="bl-info">
-        <div class="bl-name">${l.type==='prop'?`👤 ${esc(l.player)} — ${esc(l.propType)}`:esc(l.game?.name||'No game linked')}</div>
+        <div class="bl-name">${l.type==='prop'?` ${esc(l.player)} — ${esc(l.propType)}`:esc(l.game?.name||'No game linked')}</div>
         <div class="bl-pick">${esc(l.pick)}${l.line?` · ${esc(l.line)}`:''}${l.gameContext?` · ${esc(l.gameContext)}`:''}</div>
       </div>
       <span class="ltag ${l.type==='prop'?'ltag-prop':'ltag-game'}">${l.type==='prop'?'PROP':'GAME'}</span>
@@ -1763,8 +1762,8 @@ const AVATAR_RING = {'ba-won':'var(--green)','ba-active':'var(--gold)','ba-lost'
 function avatarHtml(name, avatarClass, styleExtra=''){
   const photo = friendPhoto(name);
   if(photo){
-    const ring = AVATAR_RING[avatarClass]||'var(--border)';
-    return `<img src="${esc(photo)}" alt="" class="bubble-avatar avatar-photo" style="border:2px solid ${ring};${styleExtra}">`;
+ const ring = AVATAR_RING[avatarClass]||'var(--border)';
+ return `<img src="${esc(photo)}" alt="" class="bubble-avatar avatar-photo" style="border:2px solid ${ring};${styleExtra}">`;
   }
   return `<div class="bubble-avatar ${avatarClass}" style="${styleExtra}">${esc(initials(name))}</div>`;
 }
@@ -1823,12 +1822,12 @@ async function fetchMarketOdds(sportKey, family){
   const apiKey = getOddsApiKey();
   if(!apiKey) return null;
   try{
-    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?apiKey=${apiKey}&regions=us&markets=${family}&oddsFormat=american&bookmakers=${ODDS_API_BOOKMAKERS.join(',')}`;
-    const r = await fetch(url);
-    if(!r.ok) return null;
-    const data = await r.json();
+ const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?apiKey=${apiKey}&regions=us&markets=${family}&oddsFormat=american&bookmakers=${ODDS_API_BOOKMAKERS.join(',')}`;
+ const r = await fetch(url);
+ if(!r.ok) return null;
+ const data = await r.json();
     _oddsCache[cacheKey] = { ts: Date.now(), data };
-    return data;
+ return data;
   }catch(e){ return null; }
 }
 // Match this leg's game by team name within an Odds API response, then average the
@@ -1838,18 +1837,18 @@ function marketImpliedProb(oddsEvents, leg, family){
   const home=(leg.game?.homeFullName||leg.game?.homeTeam||'').toLowerCase();
   const away=(leg.game?.awayFullName||leg.game?.awayTeam||'').toLowerCase();
   const ev = oddsEvents.find(e=>{
-    const h=(e.home_team||'').toLowerCase(), a=(e.away_team||'').toLowerCase();
-    return (home&&(h.includes(home)||home.includes(h))) || (away&&(a.includes(away)||away.includes(a)));
+ const h=(e.home_team||'').toLowerCase(), a=(e.away_team||'').toLowerCase();
+ return (home&&(h.includes(home)||home.includes(h))) || (away&&(a.includes(away)||away.includes(a)));
   });
   if(!ev) return null;
   const favorsHome = pickFavorsHome(leg.pick, {homeTeam:leg.game.homeTeam,homeFullName:leg.game.homeFullName,homeLocation:leg.game.homeLocation,awayTeam:leg.game.awayTeam,awayFullName:leg.game.awayFullName,awayLocation:leg.game.awayLocation}, leg.game);
   const prices=[];
   (ev.bookmakers||[]).forEach(bk=>{
-    const m=(bk.markets||[]).find(mk=>mk.key===family); if(!m) return;
-    const outcome = family==='h2h'
+ const m=(bk.markets||[]).find(mk=>mk.key===family); if(!m) return;
+ const outcome = family==='h2h'
       ? m.outcomes?.find(o=>favorsHome ? o.name===ev.home_team : o.name===ev.away_team)
       : m.outcomes?.[0]; // spreads/totals: first line as a reasonable proxy
-    if(outcome && typeof outcome.price==='number') prices.push(outcome.price);
+ if(outcome && typeof outcome.price==='number') prices.push(outcome.price);
   });
   if(!prices.length) return null;
   return Math.round(prices.reduce((s,p)=>s+americanImplied(p),0)/prices.length);
@@ -1898,29 +1897,29 @@ function estimateLikelihood(bet){
   const legProbs=[];
   let usedRealWinProb=false, usedPaceHeuristic=false;
   legs.forEach(leg=>{
-    const s=_scoreCache[leg.game.espnId]?.data;
-    if(!s||s.statusName==='STATUS_SCHEDULED') return;
-    const bs = leg.type==='prop' ? getPlayerPropStatus(leg,s) : getBetStatus(leg.pick,s,leg.game);
-    if(!bs || (bs.covering!==true && bs.covering!==false)) return;
+ const s=_scoreCache[leg.game.espnId]?.data;
+ if(!s||s.statusName==='STATUS_SCHEDULED') return;
+ const bs = leg.type==='prop' ? getPlayerPropStatus(leg,s) : getBetStatus(leg.pick,s,leg.game);
+ if(!bs || (bs.covering!==true && bs.covering!==false)) return;
 
-    if(bs.type==='spread' && s.winProb && isMoneylinePick(leg)){
-      const favorsHome = pickFavorsHome(leg.pick, s, leg.game);
-      if(favorsHome!==null){
-        legProbs.push(clampProb(favorsHome?s.winProb.homePct:s.winProb.awayPct)/100);
-        usedRealWinProb=true;
-        return;
+ if(bs.type==='spread' && s.winProb && isMoneylinePick(leg)){
+ const favorsHome = pickFavorsHome(leg.pick, s, leg.game);
+ if(favorsHome!==null){
+ legProbs.push(clampProb(favorsHome?s.winProb.homePct:s.winProb.awayPct)/100);
+ usedRealWinProb=true;
+ return;
       }
     }
-    legProbs.push(bs.covering ? 0.85 : 0.12); // pace-based heuristic
-    usedPaceHeuristic=true;
+ legProbs.push(bs.covering ? 0.85 : 0.12); // pace-based heuristic
+ usedPaceHeuristic=true;
   });
 
   if(legProbs.length){
-    const combined = legProbs.reduce((p,v)=>p*v, 1);
-    const pct = Math.round(clampProb(combined*100));
-    const source = usedRealWinProb ? 'Live win probability via ESPN'
+ const combined = legProbs.reduce((p,v)=>p*v, 1);
+ const pct = Math.round(clampProb(combined*100));
+ const source = usedRealWinProb ? 'Live win probability via ESPN'
       : usedPaceHeuristic ? 'Live pace tracking' : 'Implied probability from odds';
-    return { pct, source };
+ return { pct, source };
   }
   return oddsApiFallback(bet) || { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
 }
@@ -1960,27 +1959,31 @@ function renderProgress(){
   const rotation = getRotation();
   let startIdx = 0;
   if(bets.length > 0 && rotation.length > 0){
-    const found = rotation.findIndex(n => n.toLowerCase() === bets[0].person.toLowerCase());
-    if(found >= 0) startIdx = found;
+ const found = rotation.findIndex(n => n.toLowerCase() === bets[0].person.toLowerCase());
+ if(found >= 0) startIdx = found;
   }
+  // A rung only opens up once the bet before it has actually settled as a win.
+  // While a bet is still pending/active nobody is "next" — we're waiting on them.
+  const openIdx  = bets.findIndex(b => b.status==='pending' || b.status==='active');
+  const hasOpen  = openIdx >= 0;
   const slots = Array.from({length: goal}, (_,i) => ({
-    name: rotation.length ? rotation[(startIdx + i) % rotation.length] : `Rung ${i+1}`,
-    bet:  bets[i] || null,
-    isNext: i === bets.length,
+ name: rotation.length ? rotation[(startIdx + i) % rotation.length] : `Rung ${i+1}`,
+ bet:  bets[i] || null,
+ isNext: !hasOpen && i === bets.length,
   }));
 
   slotsEl.innerHTML = slots.map((s,i) => {
-    const status = s.bet?.status||null; // 'won'|'active'|'lost'|null(pending)
-    const wrapCls = status==='won'?'bc-won':status==='active'?'bc-active':status==='lost'?'bc-lost':s.isNext?'bc-next':'';
-    const avatarCls = status==='won'?'ba-won':status==='active'?'ba-active':status==='lost'?'ba-lost':'ba-pending';
-    let amtHtml = '<span class="bubble-amt">—</span>';
-    if(status==='won')       amtHtml = `<span class="bubble-amt green">+${fmt(s.bet.payout)}</span>`;
-    else if(status==='lost') amtHtml = `<span class="bubble-amt red">-${fmt(s.bet.amount)}</span>`;
-    else if(status==='active') amtHtml = `<span class="bubble-amt gold">${fmt(s.bet.amount)}</span>`;
-    const connector = i>0 ? `<div class="pb-connector ${slots[i-1].bet?.status==='won'?'filled':''}"></div>` : '';
-    return `${connector}<div class="bubble-wrap ${wrapCls}">
-      ${avatarHtml(s.name, avatarCls)}
-      ${amtHtml}
+ const status = s.bet?.status||null; // 'won'|'active'|'lost'|null(pending)
+ const wrapCls = status==='won'?'bc-won':status==='active'?'bc-active':status==='lost'?'bc-lost':status==='pending'?'bc-next':s.isNext?'bc-next':'';
+ const avatarCls = status==='won'?'ba-won':status==='active'?'ba-active':status==='lost'?'ba-lost':'ba-pending';
+ let amtHtml = '<span class="bubble-amt">—</span>';
+ if(status==='won') amtHtml = `<span class="bubble-amt green">+${fmt(s.bet.payout)}</span>`;
+ else if(status==='lost') amtHtml = `<span class="bubble-amt red">-${fmt(s.bet.amount)}</span>`;
+ else if(status==='active') amtHtml = `<span class="bubble-amt gold">${fmt(s.bet.amount)}</span>`;
+ const connector = i>0 ? `<div class="pb-connector ${slots[i-1].bet?.status==='won'?'filled':''}"></div>` : '';
+ return `${connector}<div class="bubble-wrap ${wrapCls}">
+ ${avatarHtml(s.name, avatarCls)}
+ ${amtHtml}
       <div class="bubble-name">${esc(s.name)}</div>
       <div class="bubble-rung">R${i+1}</div>
     </div>`;
@@ -1989,31 +1992,33 @@ function renderProgress(){
   // Current Pot: last bet's wager + estimated payout
   const potEl = document.getElementById('pb-pot');
   if(potEl){
-    const lastBet = bets[bets.length-1];
-    if(lastBet){
-      const pot = (parseFloat(lastBet.amount)||0) + calcEst(lastBet.amount, lastBet.odds);
-      potEl.textContent = fmt(pot);
+ const lastBet = bets[bets.length-1];
+ if(lastBet){
+ const pot = (parseFloat(lastBet.amount)||0) + calcEst(lastBet.amount, lastBet.odds);
+ potEl.textContent = fmt(pot);
     } else {
-      potEl.textContent = fmt(0);
+ potEl.textContent = fmt(0);
     }
   }
 
   // Footer: next up label
   const nextEl = document.getElementById('pb-next');
   const nextSlot = slots.find(s => s.isNext);
-  if(nextSlot && wonCount < goal)
-    nextEl.innerHTML = `Up next: <span>${esc(nextSlot.name)}</span>`;
+  if(hasOpen && wonCount < goal)
+ nextEl.innerHTML = `Waiting on <span>${esc(bets[openIdx].person||'')}</span>`;
+  else if(nextSlot && wonCount < goal)
+ nextEl.innerHTML = `Up next: <span>${esc(nextSlot.name)}</span>`;
   else if(wonCount >= goal)
-    nextEl.innerHTML = `<span style="color:var(--green)">🎉 Ladder complete!</span>`;
+ nextEl.innerHTML = `<span style="color:var(--green)">Ladder complete</span>`;
   else
-    nextEl.textContent = '';
+ nextEl.textContent = '';
 
   // Win banner
   if(wonCount >= goal && !winBannerShown){
-    winBannerShown = true;
-    const totalPayout = bets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
-    document.getElementById('win-amount').textContent = fmt(totalPayout);
-    document.getElementById('win-banner').classList.add('show');
+ winBannerShown = true;
+ const totalPayout = bets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
+ document.getElementById('win-amount').textContent = fmt(totalPayout);
+ document.getElementById('win-banner').classList.add('show');
   }
 }
 
@@ -2045,18 +2050,17 @@ function legsBlockHTML(bet){
   const isParlay=bet.betType==='parlay';
   return `
     <div class="legs-wrap">
-      <div class="legs-lbl">${isParlay?'Parlay Legs':'Bet Details'}</div>
-      ${legs.map((leg,li)=>`
+ ${legs.map((leg,li)=>`
         <div class="leg ${leg.type==='prop'?'lp':''}" id="leg-${bet.id}-${li}">
           <div class="leg-row">
             <div>
-              <div class="leg-name">${leg.type==='prop'?`👤 ${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
+              <div class="leg-name">${leg.type==='prop'?`${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
               <div class="leg-pick">${esc(leg.pick||'')}${leg.line?` · ${esc(leg.line)}`:''}${leg.gameContext?` · ${esc(leg.gameContext)}`:''}</div>
-              ${leg.type==='prop'?`<div class="prop-note">${esc(leg.propType||'')}</div>`:''}
+ ${leg.type==='prop'?`<div class="prop-note">${esc(leg.propType||'')}</div>`:''}
             </div>
             <span class="ltag ${leg.type==='prop'?'ltag-prop':'ltag-game'}">${leg.type==='prop'?'PROP':'GAME'}</span>
           </div>
-          ${leg.game?`<div id="score-${bet.id}-${li}" class="score-w"><span class="sw-loading">Loading score...</span></div>`:''}
+ ${leg.game?`<div id="score-${bet.id}-${li}" class="score-w"><span class="sw-loading">Loading score...</span></div>`:''}
         </div>`).join('')}
     </div>`;
 }
@@ -2072,14 +2076,14 @@ function activeBetCardHTML(bet, i){
     <div class="rung-card c-prominent ${bet.status==='active'?'c-active':''}" id="card-${bet.id}">
       <div class="abc-header">
         <div class="abc-who">
-          ${avatarHtml(bet.person, avatarCls, 'width:44px;height:44px;font-size:.8rem;')}
+ ${avatarHtml(bet.person, avatarCls, 'width:44px;height:44px;font-size:.8rem;')}
           <div>
             <div class="abc-name">${esc(bet.person||'Unknown')}</div>
-            ${bet.desc?`<div class="abc-desc">${esc(bet.desc)}</div>`:''}
+ ${bet.desc?`<div class="abc-desc">${esc(bet.desc)}</div>`:''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          ${isParlay?`<span class="badge b-parlay">🔗 Parlay ${legs.length} legs</span>`:''}
+ ${isParlay?`<span class="badge b-parlay"> Parlay ${legs.length} legs</span>`:''}
           <span id="hit-badge-${bet.id}"></span>
           <span class="abc-badge ${isLive?'live':'pending'}">${isLive?'● LIVE':'PENDING'}</span>
         </div>
@@ -2094,17 +2098,16 @@ function activeBetCardHTML(bet, i){
         </div>
       </div>
 
-      ${renderLikelihoodBar(bet)}
+ ${renderLikelihoodBar(bet)}
 
-      ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
+ ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
 
       <div class="abc-footer">
-        <div class="reactions-row" id="reactions-${bet.id}"></div>
         <div class="rung-actions">
-          ${bet.status==='pending'?`<button class="btn btn-ghost btn-sm" onclick="setActive('${bet.id}')">▶ Set Live</button>`:''}
-          ${bet.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openOutcomeModal('${bet.id}')">Record Outcome</button>`:''}
-          ${legs.some(l=>l.game)?`<button class="btn btn-ghost btn-sm" onclick="refreshAll('${bet.id}')">↻ Scores</button>`:''}
-          <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')">✏ Edit</button>
+ ${bet.status==='pending'?`<button class="btn btn-ghost btn-sm" onclick="setActive('${bet.id}')">Set Live</button>`:''}
+ ${bet.status==='active'?`<button class="btn btn-primary btn-sm" onclick="openOutcomeModal('${bet.id}')">Record Outcome</button>`:''}
+ ${legs.some(l=>l.game)?`<button class="btn btn-ghost btn-sm" onclick="refreshAll('${bet.id}')">↻ Scores</button>`:''}
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')"> Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deleteBet('${bet.id}')">✕</button>
         </div>
       </div>
@@ -2121,11 +2124,11 @@ function historyRowHTML(bet, i){
         <div style="display:flex;align-items:center;gap:10px;">
           <div class="rung-num" style="margin:0;">Rung ${i+1}</div>
           <div class="rung-person">${esc(bet.person||'Unknown')}</div>
-          ${bet.desc?`<div style="font-size:.8rem;color:var(--muted);">${esc(bet.desc)}</div>`:''}
+ ${bet.desc?`<div style="font-size:.8rem;color:var(--muted);">${esc(bet.desc)}</div>`:''}
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
-          ${bet.status==='won'&&bet.payout>0?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);">+${fmt(bet.payout)}</span>`:''}
-          ${bet.status==='lost'?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--red);">-${fmt(bet.amount)}</span>`:''}
+ ${bet.status==='won'&&bet.payout>0?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--green);">+${fmt(bet.payout)}</span>`:''}
+ ${bet.status==='lost'?`<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--red);">-${fmt(bet.amount)}</span>`:''}
           <span class="badge b-${bet.status}">${statusLabel}</span>
           <span style="color:var(--muted);font-size:.75rem;">▼</span>
         </div>
@@ -2138,9 +2141,9 @@ function renderLadder(){
   const historyWrap = document.getElementById('bet-history-wrap');
   const bets = window._state?.bets||[];
   if(!bets.length){
-    activeWrap.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>';
-    historyWrap.innerHTML='';
-    return;
+ activeWrap.innerHTML='<div class="empty"><div class="big">—</div><p>No bets yet. Hit + Add Bet above.</p></div>';
+ historyWrap.innerHTML='';
+ return;
   }
 
   const openBets = bets.map((b,i)=>({b,i})).filter(x=>x.b.status==='pending'||x.b.status==='active');
@@ -2156,8 +2159,7 @@ function renderLadder(){
 
   openBets.forEach(({b})=>{
     (b.legs||[]).forEach((leg,li)=>{ if(leg.game) loadScore(b.id,li,leg); });
-    renderReactions(b.id);
-    loadMarketOdds(b);
+ loadMarketOdds(b);
   });
 }
 
@@ -2169,50 +2171,49 @@ function toggleRung(id){
   const card = document.getElementById(`card-${bet.id}`); if(!card) return;
   if(_expanded.has(id)){
     _expanded.delete(id);
-    renderLadder(); // re-render collapsed
+ renderLadder(); // re-render collapsed
   } else {
     _expanded.add(id);
     // Expand inline — replace card content
-    const i = bets.indexOf(bet);
-    const legs = bet.legs||[];
-    const isParlay = bet.betType==='parlay';
-    const est = calcEst(bet.amount, bet.odds);
-    const statusLabel = {pending:'Pending',active:'Live',won:'Won',lost:'Lost'}[bet.status];
-    card.style.cursor='pointer';
-    card.onclick = () => toggleRung(id);
-    card.innerHTML=`
+ const i = bets.indexOf(bet);
+ const legs = bet.legs||[];
+ const isParlay = bet.betType==='parlay';
+ const est = calcEst(bet.amount, bet.odds);
+ const statusLabel = {pending:'Pending',active:'Live',won:'Won',lost:'Lost'}[bet.status];
+ card.style.cursor='pointer';
+ card.onclick = () => toggleRung(id);
+ card.innerHTML=`
       <div class="rung-num" style="margin-bottom:6px;">Rung ${i+1} of ${GOAL_RUNGS()} <span style="color:var(--muted);font-size:.7rem;margin-left:6px;">▲ tap to collapse</span></div>
       <div class="rung-header">
         <div class="rung-person">${esc(bet.person||'Unknown')}</div>
         <div class="badge-row">
-          ${isParlay?`<span class="badge b-parlay">🔗 Parlay ${legs.length} legs</span>`:''}
+ ${isParlay?`<span class="badge b-parlay"> Parlay ${legs.length} legs</span>`:''}
           <span class="badge b-${bet.status}">${statusLabel}</span>
         </div>
       </div>
       <div class="rung-details">
-        ${bet.desc?`<div class="det"><span class="det-lbl">Pick</span><span class="det-val">${esc(bet.desc)}</span></div>`:''}
+ ${bet.desc?`<div class="det"><span class="det-lbl">Pick</span><span class="det-val">${esc(bet.desc)}</span></div>`:''}
         <div class="det"><span class="det-lbl">Wager</span><span class="det-val gold">${fmt(bet.amount)}</span></div>
-        ${bet.odds?`<div class="det"><span class="det-lbl">Odds</span><span class="det-val">${esc(bet.odds)}</span></div>`:''}
-        ${bet.status==='won'&&bet.payout>0?`<div class="det"><span class="det-lbl">Payout</span><span class="det-val green">${fmt(bet.payout)}</span></div>`:''}
-        ${bet.status==='lost'?`<div class="det"><span class="det-lbl">Lost</span><span class="det-val" style="color:var(--red);">${fmt(bet.amount)}</span></div>`:''}
+ ${bet.odds?`<div class="det"><span class="det-lbl">Odds</span><span class="det-val">${esc(bet.odds)}</span></div>`:''}
+ ${bet.status==='won'&&bet.payout>0?`<div class="det"><span class="det-lbl">Payout</span><span class="det-val green">${fmt(bet.payout)}</span></div>`:''}
+ ${bet.status==='lost'?`<div class="det"><span class="det-lbl">Lost</span><span class="det-val" style="color:var(--red);">${fmt(bet.amount)}</span></div>`:''}
       </div>
-      ${legs.length?`
+ ${legs.length?`
       <div class="legs-wrap">
-        <div class="legs-lbl">${isParlay?'Parlay Legs':'Bet Details'}</div>
-        ${legs.map(leg=>`
+ ${legs.map(leg=>`
           <div class="leg ${leg.type==='prop'?'lp':''}">
             <div class="leg-row">
               <div>
-                <div class="leg-name">${leg.type==='prop'?`👤 ${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
+                <div class="leg-name">${leg.type==='prop'?`${esc(leg.player||'')}`:esc(leg.game?.name||'No game linked')}</div>
                 <div class="leg-pick">${esc(leg.pick||'')}${leg.line?` · ${esc(leg.line)}`:''}${leg.gameContext?` · ${esc(leg.gameContext)}`:''}</div>
               </div>
               <span class="ltag ${leg.type==='prop'?'ltag-prop':'ltag-game'}">${leg.type==='prop'?'PROP':'GAME'}</span>
             </div>
           </div>`).join('')}
       </div>`:''}
-      ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
+ ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
       <div class="rung-actions" onclick="event.stopPropagation()">
-        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')">✏ Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${bet.id}')"> Edit</button>
         <button class="btn btn-danger btn-sm" onclick="deleteBet('${bet.id}')">✕</button>
       </div>`;
   }
@@ -2262,15 +2263,15 @@ function renderLeaderboard(){
 
   // Build per-person stats
   const stats = friends.map(f=>{
-    const fb = allBets.filter(b=>b.person===f.name);
-    const won  = fb.filter(b=>b.status==='won');
-    const lost = fb.filter(b=>b.status==='lost');
-    const totalWon  = won.reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
-    const totalLost = lost.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
-    const net = totalWon - totalLost;
-    const oddsArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0);
-    const avgOdds = oddsArr.length ? Math.round(oddsArr.reduce((s,o)=>s+o,0)/oddsArr.length) : null;
-    return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgOdds };
+ const fb = allBets.filter(b=>b.person===f.name);
+ const won  = fb.filter(b=>b.status==='won');
+ const lost = fb.filter(b=>b.status==='lost');
+ const totalWon  = won.reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
+ const totalLost = lost.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+ const net = totalWon - totalLost;
+ const oddsArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0);
+ const avgOdds = oddsArr.length ? Math.round(oddsArr.reduce((s,o)=>s+o,0)/oddsArr.length) : null;
+ return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgOdds };
   }).filter(s=>s.total>0);
 
   // Overall team record (all people combined)
@@ -2288,32 +2289,32 @@ function renderLeaderboard(){
 
   const sw = document.getElementById('standings-wrap');
   if(!stats.length){
-    grid.innerHTML='<div class="lb-empty">No bets recorded yet.</div>';
-    if(sw) sw.innerHTML='';
-    return;
+ grid.innerHTML='<div class="lb-empty">No bets recorded yet.</div>';
+ if(sw) sw.innerHTML='';
+ return;
   }
 
   // ── Standings table (sorted by win %, then wins, then net) ──────
   if(sw){
-    const sorted = [...stats].sort((a,b)=>{
-      const ta=a.wins+a.losses, tb=b.wins+b.losses;
-      const pa=ta?a.wins/ta:0, pb=tb?b.wins/tb:0;
-      return pb-pa || b.wins-a.wins || b.net-a.net;
+ const sorted = [...stats].sort((a,b)=>{
+ const ta=a.wins+a.losses, tb=b.wins+b.losses;
+ const pa=ta?a.wins/ta:0, pb=tb?b.wins/tb:0;
+ return pb-pa || b.wins-a.wins || b.net-a.net;
     });
-    function styleBadge(avg){
-      if(avg===null) return `<span class="style-badge bal">—</span>`;
-      if(avg>=100)   return `<span class="style-badge agg">Aggressive</span>`;
-      if(avg>=-100)  return `<span class="style-badge bal">Balanced</span>`;
-      if(avg>=-200)  return `<span class="style-badge con">Conservative</span>`;
-      return             `<span class="style-badge chalk-h">Chalk Heavy</span>`;
+ function styleBadge(avg){
+ if(avg===null) return `<span class="style-badge bal">—</span>`;
+ if(avg>=100) return `<span class="style-badge agg">Aggressive</span>`;
+ if(avg>=-100)  return `<span class="style-badge bal">Balanced</span>`;
+ if(avg>=-200)  return `<span class="style-badge con">Conservative</span>`;
+ return             `<span class="style-badge chalk-h">Chalk Heavy</span>`;
     }
-    function fmtOdds(avg){
-      if(avg===null) return `<span class="st-odds">—</span>`;
-      const cls = avg>0?'dog':'chalk';
-      const s   = avg>0?`+${avg}`:String(avg);
-      return `<span class="st-odds ${cls}">${s}</span>`;
+ function fmtOdds(avg){
+ if(avg===null) return `<span class="st-odds">—</span>`;
+ const cls = avg>0?'dog':'chalk';
+ const s   = avg>0?`+${avg}`:String(avg);
+ return `<span class="st-odds ${cls}">${s}</span>`;
     }
-    sw.innerHTML = `
+ sw.innerHTML = `
       <div class="section-title" style="margin-bottom:.6rem">STANDINGS</div>
       <div class="standings-wrap">
         <table class="standings-table">
@@ -2328,12 +2329,12 @@ function renderLeaderboard(){
             <th class="st-hide-mob">Style</th>
           </tr></thead>
           <tbody>${sorted.map((s,i)=>{
-            const rankCls=i===0?'r1':i===1?'r2':i===2?'r3':'';
-            const decided=s.wins+s.losses;
-            const pct=decided?Math.round(s.wins/decided*100):0;
-            const netCls=s.net>0?'pos':s.net<0?'neg':'neu';
-            const netSign=s.net>=0?'+':'';
-            return `<tr>
+ const rankCls=i===0?'r1':i===1?'r2':i===2?'r3':'';
+ const decided=s.wins+s.losses;
+ const pct=decided?Math.round(s.wins/decided*100):0;
+ const netCls=s.net>0?'pos':s.net<0?'neg':'neu';
+ const netSign=s.net>=0?'+':'';
+ return `<tr>
               <td><span class="st-rank ${rankCls}">${i+1}</span></td>
               <td><span class="st-name">${esc(s.name)}</span></td>
               <td><span class="st-rec" style="color:var(--green);font-weight:700">${s.wins}</span></td>
@@ -2351,31 +2352,31 @@ function renderLeaderboard(){
   // ── Earnings tracker ────────────────────────────────────────────
   const ew = document.getElementById('earnings-wrap');
   if(ew){
-    const archive = window._state?.archive||[];
+ const archive = window._state?.archive||[];
     // Sum up the final pot from every completed ladder
-    const completedLadders = archive.filter(a=>(a.outcome||{}).result==='won');
-    const totalLadderPot = completedLadders.reduce((sum, a) => {
-      const wonBets = (a.bets||[]).filter(b=>b.status==='won');
-      const last = wonBets[wonBets.length-1];
-      return sum + (parseFloat(last?.amount)||0) + (parseFloat(last?.payout)||0);
+ const completedLadders = archive.filter(a=>(a.outcome||{}).result==='won');
+ const totalLadderPot = completedLadders.reduce((sum, a) => {
+ const wonBets = (a.bets||[]).filter(b=>b.status==='won');
+ const last = wonBets[wonBets.length-1];
+ return sum + (parseFloat(last?.amount)||0) + (parseFloat(last?.payout)||0);
     }, 0);
-    const perPersonShare = totalLadderPot / 6;
+ const perPersonShare = totalLadderPot / 6;
 
     // Per-person losses (all bets across current + archive)
-    const earningsStats = friends.map(f => {
-      const personalLosses = allBets.filter(b=>b.person===f.name&&b.status==='lost').length;
-      const lossDeduction  = personalLosses * 20;
-      const netEarnings    = perPersonShare - lossDeduction;
-      return { name:f.name, share:perPersonShare, losses:personalLosses, lossDeduction, netEarnings };
+ const earningsStats = friends.map(f => {
+ const personalLosses = allBets.filter(b=>b.person===f.name&&b.status==='lost').length;
+ const lossDeduction  = personalLosses * 20;
+ const netEarnings    = perPersonShare - lossDeduction;
+ return { name:f.name, share:perPersonShare, losses:personalLosses, lossDeduction, netEarnings };
     });
-    earningsStats.sort((a,b)=>b.netEarnings-a.netEarnings);
+ earningsStats.sort((a,b)=>b.netEarnings-a.netEarnings);
 
-    const laddersWon = completedLadders.length;
-    const shareSign  = perPersonShare>=0?'+':'';
-    ew.innerHTML = `
+ const laddersWon = completedLadders.length;
+ const shareSign  = perPersonShare>=0?'+':'';
+ ew.innerHTML = `
       <div class="section-title" style="margin-bottom:.6rem">EARNINGS</div>
       <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-bottom:.6rem;">
-        ${laddersWon} ladder${laddersWon!==1?'s':''} completed · ${fmt(totalLadderPot)} total pot · ${shareSign}${fmt(perPersonShare)} per person
+ ${laddersWon} ladder${laddersWon!==1?'s':''} completed · ${fmt(totalLadderPot)} total pot · ${shareSign}${fmt(perPersonShare)} per person
       </div>
       <div class="standings-wrap">
         <table class="standings-table">
@@ -2388,10 +2389,10 @@ function renderLeaderboard(){
             <th>Net Earnings</th>
           </tr></thead>
           <tbody>${earningsStats.map((s,i)=>{
-            const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
-            const netCls  = s.netEarnings>0?'pos':s.netEarnings<0?'neg':'neu';
-            const netSign = s.netEarnings>=0?'+':'';
-            return `<tr>
+ const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
+ const netCls  = s.netEarnings>0?'pos':s.netEarnings<0?'neg':'neu';
+ const netSign = s.netEarnings>=0?'+':'';
+ return `<tr>
               <td><span class="st-rank ${rankCls}">${i+1}</span></td>
               <td><span class="st-name">${esc(s.name)}</span></td>
               <td><span style="color:var(--green);font-weight:700">${shareSign}${fmt(s.share)}</span></td>
@@ -2407,69 +2408,69 @@ function renderLeaderboard(){
   // ── Wrestling Awards ──────────────────────────────────────────────
   const arw = document.getElementById('awards-wrap');
   if(arw){
-    const archive = window._state?.archive||[];
+ const archive = window._state?.archive||[];
 
     // 1. CM Punk – highest win % (min 2 decided bets to qualify)
-    const cmPunk = [...stats]
+ const cmPunk = [...stats]
       .filter(s=>s.wins+s.losses>=2)
       .sort((a,b)=>{
-        const pa=a.wins/(a.wins+a.losses), pb=b.wins/(b.wins+b.losses);
-        return pb-pa || b.wins-a.wins;
+ const pa=a.wins/(a.wins+a.losses), pb=b.wins/(b.wins+b.losses);
+ return pb-pa || b.wins-a.wins;
       })[0]||null;
 
     // 2. Asuka – longest all-time win streak
-    const asukaData = friends.map(f=>{
-      const fb = allBets.filter(b=>b.person===f.name);
-      let max=0, cur=0;
-      for(const b of fb){
-        if(b.status==='won'){cur++;max=Math.max(max,cur);}
-        else if(b.status==='lost') cur=0;
+ const asukaData = friends.map(f=>{
+ const fb = allBets.filter(b=>b.person===f.name);
+ let max=0, cur=0;
+ for(const b of fb){
+ if(b.status==='won'){cur++;max=Math.max(max,cur);}
+ else if(b.status==='lost') cur=0;
       }
-      return {name:f.name, streak:max};
+ return {name:f.name, streak:max};
     }).filter(s=>s.streak>0).sort((a,b)=>b.streak-a.streak)[0]||null;
 
     // 3. Jeff Hardy – highest average odds (wildest bettor)
-    const jeffHardy = [...stats]
+ const jeffHardy = [...stats]
       .filter(s=>s.avgOdds!==null)
       .sort((a,b)=>b.avgOdds-a.avgOdds)[0]||null;
 
     // 4. Undertaker – most times killed the ladder (archive outcome.failedPerson)
-    const killMap = {};
-    archive.filter(a=>a.outcome?.result==='lost'&&a.outcome?.failedPerson)
+ const killMap = {};
+ archive.filter(a=>a.outcome?.result==='lost'&&a.outcome?.failedPerson)
       .forEach(a=>{ const p=a.outcome.failedPerson; killMap[p]=(killMap[p]||0)+1; });
-    const taker = Object.entries(killMap).sort((a,b)=>b[1]-a[1])[0]||null;
+ const taker = Object.entries(killMap).sort((a,b)=>b[1]-a[1])[0]||null;
 
-    function aCard(cls,icon,title,sub,name,stat){
-      const body = name
+ function aCard(cls,icon,title,sub,name,stat){
+ const body = name
         ? `<div class="award-champ">${esc(name)}</div>`
         : `<div class="award-vacant">VACANT</div>`;
-      return `<div class="award-card ${cls}">
-        <div class="award-icon">${icon}</div>
+ return `<div class="award-card ${cls}">
+ ${icon?`<div class="award-icon">${icon}</div>`:''}
         <div class="award-title">${title}</div>
         <div class="award-subtitle">${sub}</div>
-        ${body}
+ ${body}
         <div class="award-stat">${stat}</div>
       </div>`;
     }
 
-    arw.innerHTML = `
-      <div class="section-title" style="margin-bottom:.7rem">🏆 CHAMPIONSHIP TITLES</div>
+ arw.innerHTML = `
+      <div class="section-title" style="margin-bottom:.7rem"> CHAMPIONSHIP TITLES</div>
       <div class="awards-grid">
-        ${aCard('award-gold','🥇','CM Punk Title','"Best in the World"',
-          cmPunk?.name,
-          cmPunk ? `${Math.round(cmPunk.wins/(cmPunk.wins+cmPunk.losses)*100)}% win rate · ${cmPunk.wins}W-${cmPunk.losses}L` : 'No qualifying bets yet'
+ ${aCard('award-gold','','CM Punk Title','"Best in the World"',
+ cmPunk?.name,
+ cmPunk ? `${Math.round(cmPunk.wins/(cmPunk.wins+cmPunk.losses)*100)}% win rate · ${cmPunk.wins}W-${cmPunk.losses}L` : 'No qualifying bets yet'
         )}
-        ${aCard('award-purple','🔥','Asuka Title','"Undefeated · Unstoppable"',
-          asukaData?.name,
-          asukaData ? `Best streak: ${asukaData.streak} wins in a row` : 'No wins yet'
+ ${aCard('award-purple','','Asuka Title','"Undefeated · Unstoppable"',
+ asukaData?.name,
+ asukaData ? `Best streak: ${asukaData.streak} wins in a row` : 'No wins yet'
         )}
-        ${aCard('award-green','🎲','Jeff Hardy Title','"Living on the Edge"',
-          jeffHardy?.name,
-          jeffHardy ? `Avg odds: ${jeffHardy.avgOdds>0?'+':''}${jeffHardy.avgOdds}` : 'No odds data yet'
+ ${aCard('award-green','','Jeff Hardy Title','"Living on the Edge"',
+ jeffHardy?.name,
+ jeffHardy ? `Avg odds: ${jeffHardy.avgOdds>0?'+':''}${jeffHardy.avgOdds}` : 'No odds data yet'
         )}
-        ${aCard('award-dark','☠️','Undertaker Title','"Rest in Peace, Ladder"',
-          taker?.[0]||null,
-          taker ? `${taker[1]} ladder kill${taker[1]!==1?'s':''}` : 'No ladder kills yet'
+ ${aCard('award-dark','','Undertaker Title','"Rest in Peace, Ladder"',
+ taker?.[0]||null,
+ taker ? `${taker[1]} ladder kill${taker[1]!==1?'s':''}` : 'No ladder kills yet'
         )}
       </div>`;
   }
@@ -2477,22 +2478,22 @@ function renderLeaderboard(){
   // ── Rung Deaths + Form Guide ─────────────────────────────────────
   const stw = document.getElementById('stats-tables-wrap');
   if(stw){
-    const archive = window._state?.archive||[];
+ const archive = window._state?.archive||[];
 
     // Rung death counts (rungs 1–7)
-    const deathsByRung = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
-    archive.filter(a=>a.outcome?.result==='lost'&&a.outcome?.failedOnRung>=1)
+ const deathsByRung = {1:0,2:0,3:0,4:0,5:0,6:0,7:0};
+ archive.filter(a=>a.outcome?.result==='lost'&&a.outcome?.failedOnRung>=1)
       .forEach(a=>{ const r=a.outcome.failedOnRung; if(r>=1&&r<=7) deathsByRung[r]++; });
-    const maxD = Math.max(...Object.values(deathsByRung), 1);
-    const totalDeaths = Object.values(deathsByRung).reduce((s,v)=>s+v,0);
+ const maxD = Math.max(...Object.values(deathsByRung), 1);
+ const totalDeaths = Object.values(deathsByRung).reduce((s,v)=>s+v,0);
 
-    const rungRows = [1,2,3,4,5,6,7].map(r=>{
-      const d = deathsByRung[r];
-      const barW = d>0 ? Math.max(Math.round((d/maxD)*100), 10) : 0;
-      const isHot = d>0 && d===maxD;
-      const isWarn = d>0 && !isHot;
-      const countCls = isHot?'rd-count-hot':isWarn?'rd-count-warn':'';
-      return `<tr>
+ const rungRows = [1,2,3,4,5,6,7].map(r=>{
+ const d = deathsByRung[r];
+ const barW = d>0 ? Math.max(Math.round((d/maxD)*100), 10) : 0;
+ const isHot = d>0 && d===maxD;
+ const isWarn = d>0 && !isHot;
+ const countCls = isHot?'rd-count-hot':isWarn?'rd-count-warn':'';
+ return `<tr>
         <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);padding-right:.5rem;white-space:nowrap;">Rung ${r}</td>
         <td style="width:28px;text-align:right;padding-right:.6rem"><span class="${countCls}" style="font-family:'DM Mono',monospace;font-size:.72rem;">${d}</span></td>
         <td><div class="rd-bar-wrap"><div class="rd-bar${isHot?' hot':''}" style="width:${barW}%"></div></div></td>
@@ -2500,32 +2501,32 @@ function renderLeaderboard(){
     }).join('');
 
     // Form guide — last 5 decided bets per person
-    const formRows = friends.map(f=>{
-      const fb = allBets.filter(b=>b.person===f.name&&(b.status==='won'||b.status==='lost'));
-      const decided = fb.slice(-5);
-      const padded  = [...Array(Math.max(0,5-decided.length)).fill(null), ...decided];
-      let streak=0, streakType=null;
-      for(let i=fb.length-1;i>=0;i--){
-        if(!streakType) streakType=fb[i].status;
-        if(fb[i].status===streakType) streak++;
-        else break;
+ const formRows = friends.map(f=>{
+ const fb = allBets.filter(b=>b.person===f.name&&(b.status==='won'||b.status==='lost'));
+ const decided = fb.slice(-5);
+ const padded  = [...Array(Math.max(0,5-decided.length)).fill(null), ...decided];
+ let streak=0, streakType=null;
+ for(let i=fb.length-1;i>=0;i--){
+ if(!streakType) streakType=fb[i].status;
+ if(fb[i].status===streakType) streak++;
+ else break;
       }
-      const badges = padded.map(b=>
-        b===null ? `<span class="fbadge fbadge-e">·</span>`
+ const badges = padded.map(b=>
+ b===null ? `<span class="fbadge fbadge-e">·</span>`
         : b.status==='won' ? `<span class="fbadge fbadge-w">W</span>`
         : `<span class="fbadge fbadge-l">L</span>`
       ).join('');
-      const streakHtml = !streakType ? `<span style="color:var(--muted)">—</span>`
+ const streakHtml = !streakType ? `<span style="color:var(--muted)">—</span>`
         : streakType==='won' ? `<span class="form-streak-w">+${streak}W</span>`
         : `<span class="form-streak-l">-${streak}L</span>`;
-      return `<tr>
+ return `<tr>
         <td style="padding-right:.7rem"><span class="st-name">${esc(f.name)}</span></td>
         <td><div class="form-badges">${badges}</div></td>
         <td style="padding-left:.7rem">${streakHtml}</td>
       </tr>`;
     }).join('');
 
-    stw.innerHTML = `
+ stw.innerHTML = `
       <div class="stats-tables-row">
         <div>
           <div class="section-title" style="margin-bottom:.6rem">RUNG DEATHS</div>
@@ -2557,12 +2558,12 @@ function renderLeaderboard(){
   stats.sort((a,b)=>b.net-a.net);
 
   grid.innerHTML = stats.map((s,i)=>{
-    const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
-    const cardCls = s.net>0?'pos':s.net<0?'neg':'neu';
-    const total   = s.wins+s.losses;
-    const wr      = total>0?Math.round((s.wins/total)*100):0;
-    const netSign = s.net>=0?'+':'';
-    return `
+ const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
+ const cardCls = s.net>0?'pos':s.net<0?'neg':'neu';
+ const total   = s.wins+s.losses;
+ const wr      = total>0?Math.round((s.wins/total)*100):0;
+ const netSign = s.net>=0?'+':'';
+ return `
     <div class="lb-card ${cardCls}">
       <div class="lb-rank ${rankCls}">#${i+1}</div>
       <div class="lb-name">${esc(s.name)}</div>
@@ -2597,24 +2598,24 @@ function applyScoreToEl(el, betId, li, leg, s){
   if(!el) return;
   const hw=parseInt(s.homeScore)>parseInt(s.awayScore), aw=!hw&&parseInt(s.awayScore)>parseInt(s.homeScore);
   const live=s.statusName==='STATUS_IN_PROGRESS'||s.statusName==='STATUS_HALFTIME', fin=s.statusName==='STATUS_FINAL';
-  const sCls=live?'live':fin?'final':'upcoming', sTxt=live?(s.statusName==='STATUS_HALFTIME'?'🟡 HALFTIME':'🔴 LIVE'):fin?'FINAL':'UPCOMING';
+  const sCls=live?'live':fin?'final':'upcoming', sTxt=live?(s.statusName==='STATUS_HALFTIME'?'HALFTIME':'LIVE'):fin?'FINAL':'UPCOMING';
   // Detect player props: explicit type OR pick text matches a player in box score
   let bs, isProp=false;
   const propStatus = getPlayerPropStatus(leg, s);
   if(leg.type==='prop'||propStatus){
-    bs=propStatus; isProp=true;
+ bs=propStatus; isProp=true;
   } else {
-    bs=getBetStatus(leg.pick,s,leg.game);
+ bs=getBetStatus(leg.pick,s,leg.game);
   }
   const hit = bs?.covering===true&&(live||fin);
   el.classList.toggle('sh',hit);
   document.getElementById(`leg-${betId}-${li}`)?.classList.toggle('lh',hit);
   let indicatorHtml='';
   if(bs&&(live||fin)){
-    const indCls=bs.covering===true?'covering':bs.covering===false?'losing':'neutral';
-    indicatorHtml=`<div class="sw-bet-indicator ${indCls}">${bs.label}</div>`;
+ const indCls=bs.covering===true?'covering':bs.covering===false?'losing':'neutral';
+ indicatorHtml=`<div class="sw-bet-indicator ${indCls}">${bs.label}</div>`;
   } else if(bs&&!live&&!fin&&(bs.type==='total'||bs.type==='prop')){
-    indicatorHtml=`<div class="sw-bet-indicator neutral">${bs.label}</div>`;
+ indicatorHtml=`<div class="sw-bet-indicator neutral">${bs.label}</div>`;
   }
   const isTotalBet = bs?.type==='total';
   const totScore = (parseInt(s.homeScore)||0)+(parseInt(s.awayScore)||0);
@@ -2628,8 +2629,8 @@ function applyScoreToEl(el, betId, li, leg, s){
       <div class="sw-vs">@</div>
       <div class="sw-team">${espnLogoChip(leg.game?.league,s.homeTeamId)}<div class="sw-abb">${esc(s.homeTeam)}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
     </div>
-    ${totalRowHtml}${propRowHtml}
-    ${indicatorHtml}
+ ${totalRowHtml}${propRowHtml}
+ ${indicatorHtml}
     <div class="sw-meta">
       <div class="sw-status ${sCls}">${sTxt}</div>
       <div class="sw-detail">${esc(s.shortDetail)}</div>
@@ -2644,8 +2645,8 @@ async function loadScore(betId,li,leg){
   // Apply cached score instantly if fresh enough
   const cached=_scoreCache[g.espnId];
   if(cached&&Date.now()-cached.ts<30000){
-    const el=document.getElementById(`score-${betId}-${li}`);
-    applyScoreToEl(el,betId,li,leg,cached.data); return;
+ const el=document.getElementById(`score-${betId}-${li}`);
+ applyScoreToEl(el,betId,li,leg,cached.data); return;
   }
   const s=await getLiveScore(g.espnId,g.sport,g.league);
   // Re-query AFTER the async fetch — DOM may have been rebuilt by a Firestore re-render
@@ -2668,11 +2669,11 @@ function refreshAll(betId){
 // No-op (and effectively stops) once that bet is no longer 'active'.
 setInterval(()=>{
   (window._state?.bets||[]).forEach(b=>{
-    if(b.status!=='active') return;
+ if(b.status!=='active') return;
     (b.legs||[]).forEach((leg,li)=>{
-      if(!leg.game) return;
-      delete _scoreCache[leg.game.espnId];
-      loadScore(b.id,li,leg);
+ if(!leg.game) return;
+ delete _scoreCache[leg.game.espnId];
+ loadScore(b.id,li,leg);
     });
   });
 }, 60000);
@@ -2686,8 +2687,8 @@ function updateHitBadge(betId){
   const badge=document.getElementById(`hit-badge-${betId}`), card=document.getElementById(`card-${betId}`);
   if(!badge) return;
   const tot=gLegs.length, all=cnt===tot&&tot>0;
-  if(all){ badge.innerHTML='<span class="badge b-hitting">✅ Hitting</span>'; card?.classList.add('c-hitting'); }
-  else if(cnt>0&&tot>1){ badge.innerHTML=`<span class="badge b-hitting">${cnt}/${tot} Legs ✅</span>`; card?.classList.remove('c-hitting'); }
+  if(all){ badge.innerHTML='<span class="badge b-hitting"> Hitting</span>'; card?.classList.add('c-hitting'); }
+  else if(cnt>0&&tot>1){ badge.innerHTML=`<span class="badge b-hitting">${cnt}/${tot} Legs </span>`; card?.classList.remove('c-hitting'); }
   else { badge.innerHTML=''; card?.classList.remove('c-hitting'); }
 }
 
@@ -2711,7 +2712,7 @@ function openAddBetModal(){
   if(betAmtEl) betAmtEl.value = (lastWon && lastWon.payout > 0) ? parseFloat(lastWon.payout).toFixed(2) : '20.00';
   // Reset slip scanner
   const slipZone = document.getElementById('slip-zone');
-  if(slipZone) slipZone.innerHTML = `<div class="slip-uz-icon">📷</div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+  if(slipZone) slipZone.innerHTML = `<div class="slip-uz-icon"></div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
   const slipSt = document.getElementById('slip-status'); if(slipSt) slipSt.innerHTML='';
   const slipPr = document.getElementById('slip-preview'); if(slipPr) slipPr.innerHTML='';
   // Reset date picker to today
@@ -2730,22 +2731,22 @@ async function saveBet(){
   if(!amount||isNaN(amount)){ alert('Please enter a wager amount.'); return; }
   let desc='', legs=[];
   if(currentBetType==='freeform'){
-    desc=document.getElementById('ff-desc').value.trim();
-    if(!desc){ alert('Please enter a bet description.'); return; }
+ desc=document.getElementById('ff-desc').value.trim();
+ if(!desc){ alert('Please enter a bet description.'); return; }
   } else {
     // Auto-add pending leg if user filled in a pick or linked a game but forgot "+ Add Leg"
-    const pendingPick=document.getElementById('leg-pick')?.value.trim()||'';
-    if(pendingPick||legGame){
-      const leg={id:uid(),type:currentLegType,pick:pendingPick||(legGame?.shortName||'Linked game')};
-      if(currentLegType==='game'&&legGame) leg.game=legGame;
-      builtLegs.push(leg);
+ const pendingPick=document.getElementById('leg-pick')?.value.trim()||'';
+ if(pendingPick||legGame){
+ const leg={id:uid(),type:currentLegType,pick:pendingPick||(legGame?.shortName||'Linked game')};
+ if(currentLegType==='game'&&legGame) leg.game=legGame;
+ builtLegs.push(leg);
     }
-    if(currentBetType==='parlay'&&builtLegs.length<2){ alert('A parlay needs at least 2 legs.'); return; }
-    legs=[...builtLegs];
-    if(legs.length) desc=legs.map(l=>l.type==='prop'?`${l.player} ${l.line}`:l.pick).join(' + ');
+ if(currentBetType==='parlay'&&builtLegs.length<2){ alert('A parlay needs at least 2 legs.'); return; }
+ legs=[...builtLegs];
+ if(legs.length) desc=legs.map(l=>l.type==='prop'?`${l.player} ${l.line}`:l.pick).join(' + ');
   }
   await window.db_addBet({person,amount:parseFloat(amount),odds,desc,status,notes,betType:currentBetType,legs,payout:0});
-  maybeNotify(`🎲 ${person} placed a bet`, `${desc||'Bet'}${odds?` at ${odds}`:''} (${fmt(amount)})`);
+  maybeNotify(` ${person} placed a bet`, `${desc||'Bet'}${odds?` at ${odds}`:''} (${fmt(amount)})`);
   closeModal('add-bet-modal');
 }
 
@@ -2762,9 +2763,9 @@ function openOutcomeModal(id){
 }
 async function recordOutcome(result){
   if(result==='push'){
-    await window.db_deleteBet(outcomeTargetId);
-    closeModal('outcome-modal');
-    return;
+ await window.db_deleteBet(outcomeTargetId);
+ closeModal('outcome-modal');
+ return;
   }
   const bets = window._state?.bets||[];
   const bet  = bets.find(b=>b.id===outcomeTargetId);
@@ -2772,40 +2773,40 @@ async function recordOutcome(result){
   if(result==='won') upd.payout=parseFloat(document.getElementById('outcome-payout').value)||0;
   await window.db_updateBet(outcomeTargetId,upd);
   if(bet){
-    if(result==='won'){
-      const rungIdx  = bets.indexOf(bet);
-      const wonCount = bets.filter(b=>b.status==='won').length + 1; // include this win
-      if(wonCount >= GOAL_RUNGS()){
-        const totalPayout = bets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0) + upd.payout;
-        maybeNotify('🏆 LADDER COMPLETE!', `${bet.person} sealed it with ${bet.desc||'the final bet'}. ${fmt(totalPayout)} in the pot! Cash it out! 💰`);
+ if(result==='won'){
+ const rungIdx  = bets.indexOf(bet);
+ const wonCount = bets.filter(b=>b.status==='won').length + 1; // include this win
+ if(wonCount >= GOAL_RUNGS()){
+ const totalPayout = bets.filter(b=>b.status==='won').reduce((s,b)=>s+(parseFloat(b.payout)||0),0) + upd.payout;
+ maybeNotify(' LADDER COMPLETE!', `${bet.person} sealed it with ${bet.desc||'the final bet'}. ${fmt(totalPayout)} in the pot! Cash it out! `);
       } else {
-        const rotation = getRotation();
-        const idx = rotation.findIndex(n=>n.toLowerCase()===bet.person.toLowerCase());
-        const nextPerson = rotation.length ? rotation[(idx+1+rotation.length)%rotation.length] : '';
-        maybeNotify(`✅ ${bet.person} won rung ${rungIdx+1}!`,
-          `${bet.desc||'Bet'} hit 🔥${nextPerson?` ${nextPerson} is up ${fmt(upd.payout)} to bet — keep it rolling`:` Payout: ${fmt(upd.payout)}`}`);
+ const rotation = getRotation();
+ const idx = rotation.findIndex(n=>n.toLowerCase()===bet.person.toLowerCase());
+ const nextPerson = rotation.length ? rotation[(idx+1+rotation.length)%rotation.length] : '';
+ maybeNotify(` ${bet.person} won rung ${rungIdx+1}!`,
+          `${bet.desc||'Bet'} hit.${nextPerson?` ${nextPerson} is up ${fmt(upd.payout)} to bet — keep it rolling`:` Payout: ${fmt(upd.payout)}`}`);
       }
     }
-    if(result==='lost') maybeNotify(`❌ ${bet.person} lost`, `${bet.desc||'Bet'} didn't land. Ladder resets from $20.`);
+ if(result==='lost') maybeNotify(` ${bet.person} lost`, `${bet.desc||'Bet'} didn't land. Ladder resets from $20.`);
   }
   closeModal('outcome-modal');
 
   // ── Auto-archive on loss ──────────────────────────────
   if(result==='lost' && bet){
-    const updatedBets = bets.map(b => b.id===outcomeTargetId ? {...b, status:'lost'} : b);
-    const failIdx     = updatedBets.findIndex(b=>b.id===outcomeTargetId);
-    await window.db_archiveLadder(updatedBets, {
-      result:'lost', failedOnRung: failIdx+1, failedPerson: bet.person||'', notes:''
+ const updatedBets = bets.map(b => b.id===outcomeTargetId ? {...b, status:'lost'} : b);
+ const failIdx     = updatedBets.findIndex(b=>b.id===outcomeTargetId);
+ await window.db_archiveLadder(updatedBets, {
+ result:'lost', failedOnRung: failIdx+1, failedPerson: bet.person||'', notes:''
     });
     // Show reset notice in the ladder tab
-    const container = document.getElementById('active-bet-wrap');
-    if(container) container.innerHTML = `
+ const container = document.getElementById('active-bet-wrap');
+ if(container) container.innerHTML = `
       <div class="empty">
-        <div style="font-size:2.5rem;margin-bottom:.5rem;">💀</div>
+        <div style="font-size:2.5rem;margin-bottom:.5rem;"></div>
         <p style="margin-bottom:.3rem;"><b style="color:var(--red);">${esc(bet.person)}</b> lost on Rung ${failIdx+1}</p>
         <p style="font-size:.82rem;color:var(--muted);">Ladder archived. Next person is up — start fresh at $20.</p>
       </div>`;
-    const hw = document.getElementById('bet-history-wrap'); if(hw) hw.innerHTML='';
+ const hw = document.getElementById('bet-history-wrap'); if(hw) hw.innerHTML='';
   }
 }
 
@@ -2828,13 +2829,13 @@ function openEditModal(id){
 async function saveEdit(){
   const id=document.getElementById('edit-id').value;
   await window.db_updateBet(id,{
-    person:document.getElementById('edit-person').value,
-    desc:document.getElementById('edit-desc').value.trim(),
-    amount:parseFloat(document.getElementById('edit-amount').value)||0,
-    odds:document.getElementById('edit-odds').value.trim(),
-    status:document.getElementById('edit-status').value,
-    payout:parseFloat(document.getElementById('edit-payout').value)||0,
-    notes:document.getElementById('edit-notes').value.trim(),
+ person:document.getElementById('edit-person').value,
+ desc:document.getElementById('edit-desc').value.trim(),
+ amount:parseFloat(document.getElementById('edit-amount').value)||0,
+ odds:document.getElementById('edit-odds').value.trim(),
+ status:document.getElementById('edit-status').value,
+ payout:parseFloat(document.getElementById('edit-payout').value)||0,
+ notes:document.getElementById('edit-notes').value.trim(),
   });
   closeModal('edit-modal');
 }
@@ -2857,9 +2858,9 @@ function openEndLadderModal(){
   const bets = window._state?.bets||[];
   const sel = document.getElementById('end-fail-rung');
   if(sel){
-    sel.innerHTML = bets.map((b,i)=>`<option value="${i}">${i+1}. ${esc(b.person||'Rung '+(i+1))} — ${esc(b.desc||'Bet')}</option>`).join('');
+ sel.innerHTML = bets.map((b,i)=>`<option value="${i}">${i+1}. ${esc(b.person||'Rung '+(i+1))} — ${esc(b.desc||'Bet')}</option>`).join('');
     // default to last bet
-    sel.value = String(bets.length-1);
+ sel.value = String(bets.length-1);
   }
   document.getElementById('end-notes').value='';
   document.getElementById('end-ladder-modal').classList.add('open');
@@ -2888,7 +2889,7 @@ function renderAdminFriends(){
     <div class="friend-row">
       <div style="display:flex;align-items:center;gap:10px;">
         <label class="avatar-upload-label" title="Click to change photo">
-          ${avatarHtml(fr.name, 'ba-neutral', 'width:34px;height:34px;font-size:.68rem;')}
+ ${avatarHtml(fr.name, 'ba-neutral', 'width:34px;height:34px;font-size:.68rem;')}
           <input type="file" accept="image/*" style="display:none;" onchange="uploadFriendAvatar('${fr.id}',this)">
         </label>
         <div>${esc(fr.name)}</div>
@@ -2928,8 +2929,8 @@ async function removeFriend(id){
   const f=(window._state?.friends||[]).find(f=>f.id===id);
   await window.db_deleteFriend(id);
   if(f){
-    const newRot=getRotation().filter(n=>n!==f.name);
-    await window.db_saveRotation(newRot);
+ const newRot=getRotation().filter(n=>n!==f.name);
+ await window.db_saveRotation(newRot);
   }
   renderRotationEditor();
 }
@@ -2959,33 +2960,33 @@ function renderPersonalStats(){
   if(!friends.length){ grid.innerHTML='<div class="lb-empty">Add friends to see personal stats.</div>'; return; }
 
   const cards = friends.map(f=>{
-    const fb   = allBets.filter(b=>b.person===f.name);
-    const wins = fb.filter(b=>b.status==='won');
-    const losses = fb.filter(b=>b.status==='lost');
-    if(!fb.length) return null;
-    const isOpen = _psOpen.has(f.name);
-    const betRows = [...fb].reverse().map(b=>{
-      const isW = b.status==='won', isL = b.status==='lost';
-      if(!isW&&!isL) return '';
-      const amt = isW ? `+${fmt(b.payout||0)}` : `-${fmt(b.amount||0)}`;
-      return `<div class="ps-bet">
+ const fb   = allBets.filter(b=>b.person===f.name);
+ const wins = fb.filter(b=>b.status==='won');
+ const losses = fb.filter(b=>b.status==='lost');
+ if(!fb.length) return null;
+ const isOpen = _psOpen.has(f.name);
+ const betRows = [...fb].reverse().map(b=>{
+ const isW = b.status==='won', isL = b.status==='lost';
+ if(!isW&&!isL) return '';
+ const amt = isW ? `+${fmt(b.payout||0)}` : `-${fmt(b.amount||0)}`;
+ return `<div class="ps-bet">
         <span class="ps-bet-desc">${esc(b.desc||'Bet')}</span>
         <span class="ps-bet-amt ${isW?'w':'l'}">${amt}</span>
       </div>`;
     }).join('');
-    const st = calcStreaks([...fb].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0)));
-    const streakPills = [];
-    if(st.streak>1&&st.streakType==='won') streakPills.push(`<span class="streak-pill hot">🔥 ${st.streak} win streak</span>`);
-    if(st.streak>1&&st.streakType==='lost') streakPills.push(`<span class="streak-pill cold">❄️ ${st.streak} loss streak</span>`);
-    if(st.maxStreak>1) streakPills.push(`<span class="streak-pill best">Best: ${st.maxStreak}W streak</span>`);
-    if(st.bestOdds) streakPills.push(`<span class="streak-pill best">Best odds: +${st.bestOdds}</span>`);
-    if(st.biggestPayout) streakPills.push(`<span class="streak-pill best">Biggest win: ${fmt(st.biggestPayout.payout)}</span>`);
-    return `<div class="ps-card">
+ const st = calcStreaks([...fb].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0)));
+ const streakPills = [];
+ if(st.streak>1&&st.streakType==='won') streakPills.push(`<span class="streak-pill hot"> ${st.streak} win streak</span>`);
+ if(st.streak>1&&st.streakType==='lost') streakPills.push(`<span class="streak-pill cold"> ${st.streak} loss streak</span>`);
+ if(st.maxStreak>1) streakPills.push(`<span class="streak-pill best">Best: ${st.maxStreak}W streak</span>`);
+ if(st.bestOdds) streakPills.push(`<span class="streak-pill best">Best odds: +${st.bestOdds}</span>`);
+ if(st.biggestPayout) streakPills.push(`<span class="streak-pill best">Biggest win: ${fmt(st.biggestPayout.payout)}</span>`);
+ return `<div class="ps-card">
       <div class="ps-header" onclick="togglePS('${f.name}')">
         <div>
           <div class="ps-name">${esc(f.name)}</div>
           <div class="ps-record"><b class="w">${wins.length}W</b> · <b class="l">${losses.length}L</b></div>
-          ${streakPills.length?`<div class="streak-bar">${streakPills.join('')}</div>`:''}
+ ${streakPills.length?`<div class="streak-bar">${streakPills.join('')}</div>`:''}
         </div>
         <span class="ps-chevron ${isOpen?'open':''}">▼</span>
       </div>
@@ -3010,19 +3011,19 @@ function renderPastLadders(){
   if(!archive.length){ list.innerHTML='<div class="lb-empty">No completed ladders yet.</div>'; return; }
   const total = archive.length;
   list.innerHTML = archive.map((a,idx)=>{
-    const ladderNum = total - idx; // newest = highest number
-    const outcome   = a.outcome||{result:'won',failedOnRung:null};
-    const isWon     = outcome.result==='won';
-    const bets      = a.bets||[];
-    const date      = a.completedAt?.toDate ? a.completedAt.toDate().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
-    const outcomeStr = isWon
-      ? `Won all ${bets.filter(b=>b.status==='won').length} rungs 🏆`
+ const ladderNum = total - idx; // newest = highest number
+ const outcome   = a.outcome||{result:'won',failedOnRung:null};
+ const isWon     = outcome.result==='won';
+ const bets      = a.bets||[];
+ const date      = a.completedAt?.toDate ? a.completedAt.toDate().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+ const outcomeStr = isWon
+      ? `Won all ${bets.filter(b=>b.status==='won').length} rungs `
       : `Lost on Rung ${outcome.failedOnRung||'?'}${outcome.failedPerson?' ('+outcome.failedPerson+')':''}`;
-    const isOpen = _plOpen.has(a.id);
-    const betRows = bets.map((b,i)=>{
-      const isW=b.status==='won', isL=b.status==='lost';
-      const amt = isW?`+${fmt(b.payout||0)}`:isL?`-${fmt(b.amount||0)}`:'—';
-      return `<div class="pl-bet">
+ const isOpen = _plOpen.has(a.id);
+ const betRows = bets.map((b,i)=>{
+ const isW=b.status==='won', isL=b.status==='lost';
+ const amt = isW?`+${fmt(b.payout||0)}`:isL?`-${fmt(b.amount||0)}`:'—';
+ return `<div class="pl-bet">
         <div class="pl-bet-left">
           <span class="pl-bet-rung">R${i+1}</span>
           <span class="pl-bet-person">${esc(b.person||'?')}</span>
@@ -3031,7 +3032,7 @@ function renderPastLadders(){
         <span class="pl-bet-result ${isW?'w':isL?'l':''}">${amt}</span>
       </div>`;
     }).join('');
-    return `<div class="pl-row">
+ return `<div class="pl-row">
       <div class="pl-header ${isWon?'won':'lost'}" onclick="togglePL('${a.id}')">
         <div class="pl-left">
           <div class="pl-num">LADDER #${ladderNum}</div>
@@ -3069,21 +3070,21 @@ function calcStreaks(bets){
   // Current streak
   let streak=0, streakType=resolved[resolved.length-1].status;
   for(let i=resolved.length-1;i>=0;i--){
-    if(resolved[i].status===streakType) streak++;
-    else break;
+ if(resolved[i].status===streakType) streak++;
+ else break;
   }
 
   // Best odds hit (won bets only)
   const wonBets = resolved.filter(b=>b.status==='won'&&b.odds);
   let bestOdds=null, bestOddsBet=null;
   wonBets.forEach(b=>{
-    const o=parseInt(b.odds)||0;
-    if(o>0&&(bestOdds===null||o>bestOdds)){ bestOdds=o; bestOddsBet=b; }
+ const o=parseInt(b.odds)||0;
+ if(o>0&&(bestOdds===null||o>bestOdds)){ bestOdds=o; bestOddsBet=b; }
   });
 
   // Biggest payout
   const biggestPayout = resolved.filter(b=>b.status==='won').reduce((best,b)=>{
-    return (parseFloat(b.payout)||0)>(parseFloat(best?.payout)||0)?b:best;
+ return (parseFloat(b.payout)||0)>(parseFloat(best?.payout)||0)?b:best;
   }, null);
 
   // Longest win streak ever
@@ -3096,54 +3097,15 @@ function calcStreaks(bets){
 // ════════════════════════════════════════════════════════
 // EMOJI REACTIONS
 // ════════════════════════════════════════════════════════
-const REACTION_EMOJIS = ['🔥','💀','😤','🤑','😬','🙏','💪','👀'];
-let _myName = null; // set when user picks their name for reactions
-
-function getMyName(){
-  if(_myName) return _myName;
-  // Try to infer from friends list — prompt once
-  return null;
-}
-
-function renderReactions(betId){
-  const el = document.getElementById(`reactions-${betId}`); if(!el) return;
-  const rxns = window._state.reactions[betId]||{};
-  const me = getMyName();
-
-  const pills = REACTION_EMOJIS.map(emoji=>{
-    const people = rxns[emoji]||[];
-    const count = people.length;
-    const isMine = me && people.includes(me);
-    return `<button class="reaction-btn ${count===0?'rc-zero':''} ${isMine?'reacted':''}"
-      onclick="toggleReaction('${betId}','${emoji}')" title="${people.join(', ')||'Be first!'}">
-      ${emoji}<span class="rc">${count||''}</span>
-    </button>`;
-  }).join('');
-
-  el.innerHTML = pills;
-}
-
-async function toggleReaction(betId, emoji){
-  let me = getMyName();
-  if(!me){
-    // Prompt user to pick their name
-    const friends = (window._state?.friends||[]).map(f=>f.name);
-    if(!friends.length){ alert('Add friends first!'); return; }
-    me = await pickName(friends);
-    if(!me) return;
-    _myName = me;
-    localStorage.setItem('dtladder_myname', me);
-  }
-  await window.db_toggleReaction(betId, emoji, me);
-}
+// Emoji reaction UI removed; window.db_toggleReaction() above is retained.
 
 async function pickName(names){
   return new Promise(resolve=>{
-    const modal = document.getElementById('pick-name-modal');
-    const list  = document.getElementById('pick-name-list');
-    list.innerHTML = names.map(n=>`<button class="btn btn-ghost" style="width:100%;margin-bottom:6px;text-align:left;" onclick="resolveName('${esc(n)}')">${esc(n)}</button>`).join('');
-    modal.classList.add('open');
-    window._nameResolve = resolve;
+ const modal = document.getElementById('pick-name-modal');
+ const list  = document.getElementById('pick-name-list');
+ list.innerHTML = names.map(n=>`<button class="btn btn-ghost" style="width:100%;margin-bottom:6px;text-align:left;" onclick="resolveName('${esc(n)}')">${esc(n)}</button>`).join('');
+ modal.classList.add('open');
+ window._nameResolve = resolve;
   });
 }
 function resolveName(name){
@@ -3162,7 +3124,7 @@ setTimeout(()=>{
   const st  = document.getElementById('claude-key-status');
   const k   = getClaudeKey();
   if(inp && k) inp.value = k;
-  if(st) st.textContent = k ? '✅ Key saved.' : 'No key saved yet.';
+  if(st) st.textContent = k ? ' Key saved.' : 'No key saved yet.';
 }, 600);
 // Restore saved VAPID key into admin input
 setTimeout(()=>{
@@ -3170,7 +3132,7 @@ setTimeout(()=>{
   const st  = document.getElementById('vapid-key-status');
   const k   = getVapidKey();
   if(inp && k) inp.value = k;
-  if(st) st.textContent = k ? '✅ VAPID key saved.' : 'No VAPID key saved yet.';
+  if(st) st.textContent = k ? ' VAPID key saved.' : 'No VAPID key saved yet.';
 }, 600);
 // Restore saved Odds API key into admin input
 setTimeout(()=>{
@@ -3178,7 +3140,7 @@ setTimeout(()=>{
   const st  = document.getElementById('odds-api-key-status');
   const k   = getOddsApiKey();
   if(inp && k) inp.value = k;
-  if(st) st.textContent = k ? '✅ Key saved.' : 'No key saved yet.';
+  if(st) st.textContent = k ? ' Key saved.' : 'No key saved yet.';
 }, 600);
 
 // ════════════════════════════════════════════════════════
@@ -3187,25 +3149,25 @@ setTimeout(()=>{
 async function requestNotifPermission(){
   const statusEl = document.getElementById('notif-status');
   const btn = document.getElementById('notif-btn');
-  if(!('Notification' in window)){ if(statusEl) statusEl.textContent='❌ Notifications not supported in this browser.'; return; }
+  if(!('Notification' in window)){ if(statusEl) statusEl.textContent=' Notifications not supported in this browser.'; return; }
   const perm = await Notification.requestPermission();
   if(perm!=='granted'){
-    if(statusEl) statusEl.textContent='❌ Permission denied. Enable notifications in your browser settings.';
-    return;
+ if(statusEl) statusEl.textContent=' Permission denied. Enable notifications in your browser settings.';
+ return;
   }
-  if(btn) btn.textContent='✅ Notifications Enabled';
+  if(btn) btn.textContent=' Notifications Enabled';
   const vapidKey = getVapidKey();
   if(!vapidKey){
-    if(statusEl) statusEl.textContent='✅ Enabled on this device — add a VAPID key below to receive push when the app is closed.';
-    await window.db_savePushToken('manual-' + Date.now()); // placeholder so the collection exists
-    return;
+ if(statusEl) statusEl.textContent=' Enabled on this device — add a VAPID key below to receive push when the app is closed.';
+ await window.db_savePushToken('manual-' + Date.now()); // placeholder so the collection exists
+ return;
   }
   const token = await window.getFcmToken(vapidKey);
   if(token){
-    await window.db_savePushToken(token);
-    if(statusEl) statusEl.textContent='✅ Notifications enabled — this device will receive push once functions/ is deployed.';
+ await window.db_savePushToken(token);
+ if(statusEl) statusEl.textContent=' Notifications enabled — this device will receive push once functions/ is deployed.';
   } else {
-    if(statusEl) statusEl.textContent='⚠️ Could not get a push token. Check the VAPID key and that sw.js is registered.';
+ if(statusEl) statusEl.textContent=' Could not get a push token. Check the VAPID key and that sw.js is registered.';
   }
 }
 
@@ -3222,7 +3184,7 @@ function saveVapidKey(){
   const k = inp.value.trim();
   localStorage.setItem('dtladder_vapid_key', k);
   window.db_saveSettings({vapidKey: k});
-  if(st) st.textContent = k ? '✅ VAPID key saved for all devices.' : 'Key cleared.';
+  if(st) st.textContent = k ? ' VAPID key saved for all devices.' : 'Key cleared.';
 }
 
 // ════════════════════════════════════════════════════════
@@ -3238,7 +3200,7 @@ function saveOddsApiKey(){
   const k = inp.value.trim();
   localStorage.setItem('dtladder_odds_api_key', k);
   window.db_saveSettings({oddsApiKey: k});
-  if(st) st.textContent = k ? '✅ Odds API key saved for all devices.' : 'Key cleared.';
+  if(st) st.textContent = k ? ' Odds API key saved for all devices.' : 'Key cleared.';
 }
 
 // Client-side notification trigger (fires when app is open)
@@ -3253,10 +3215,10 @@ setTimeout(()=>{
   const statusEl = document.getElementById('notif-status');
   const btn = document.getElementById('notif-btn');
   if(!statusEl) return;
-  if(!('Notification' in window)){ statusEl.textContent='❌ Not supported in this browser.'; return; }
-  if(Notification.permission==='granted'){ statusEl.textContent='✅ Notifications enabled on this device.'; if(btn) btn.textContent='✅ Notifications Enabled'; }
-  else if(Notification.permission==='denied'){ statusEl.textContent='❌ Blocked — enable in browser settings.'; }
-  else{ statusEl.textContent='🔔 Not yet enabled on this device.'; }
+  if(!('Notification' in window)){ statusEl.textContent=' Not supported in this browser.'; return; }
+  if(Notification.permission==='granted'){ statusEl.textContent=' Notifications enabled on this device.'; if(btn) btn.textContent=' Notifications Enabled'; }
+  else if(Notification.permission==='denied'){ statusEl.textContent=' Blocked — enable in browser settings.'; }
+  else{ statusEl.textContent=' Not yet enabled on this device.'; }
 }, 500);
 
 // ════════════════════════════════════════════════════════
@@ -3266,7 +3228,7 @@ function setTheme(name){
   document.documentElement.setAttribute('data-theme', name);
   localStorage.setItem('dtladder_theme', name);
   ['dark','dim','light'].forEach(t=>{
-    document.getElementById(`theme-${t}`)?.classList.toggle('active', t===name);
+ document.getElementById(`theme-${t}`)?.classList.toggle('active', t===name);
   });
 }
 // Restore saved theme on load
@@ -3294,8 +3256,8 @@ applyOrderMode();
 // ════════════════════════════════════════════════════════
 function switchTab(name){
   ['ladder','leaderboard','history','admin'].forEach(t=>{
-    document.getElementById(`tab-${t}`)?.classList.toggle('active', t===name);
-    document.getElementById(`panel-${t}`)?.classList.toggle('active', t===name);
+ document.getElementById(`tab-${t}`)?.classList.toggle('active', t===name);
+ document.getElementById(`panel-${t}`)?.classList.toggle('active', t===name);
   });
 }
 
@@ -3308,8 +3270,8 @@ function getNextPerson(){
   if(!rotation.length) return '';
   let startIdx = 0;
   if(bets.length > 0){
-    const found = rotation.findIndex(n => n.toLowerCase() === bets[0].person.toLowerCase());
-    if(found >= 0) startIdx = found;
+ const found = rotation.findIndex(n => n.toLowerCase() === bets[0].person.toLowerCase());
+ if(found >= 0) startIdx = found;
   }
   return rotation[(startIdx + bets.length) % rotation.length];
 }
@@ -3328,7 +3290,7 @@ function saveClaudeKey(){
   const k = inp.value.trim();
   localStorage.setItem('claude_api_key', k);           // local fallback
   window.db_saveSettings({claudeApiKey: k});            // shared with group
-  if(st) st.textContent = k ? '✅ Key saved for all devices.' : 'Key cleared.';
+  if(st) st.textContent = k ? ' Key saved for all devices.' : 'Key cleared.';
 }
 
 // ════════════════════════════════════════════════════════
@@ -3343,46 +3305,46 @@ async function handleSlipUpload(input){
   // Try cached state first; if empty, fetch directly from Firestore (handles cold-start on mobile)
   let key = getClaudeKey();
   if(!key && window.db_getSettings){
-    if(zone) zone.innerHTML = `<div class="slip-uz-scanning">⚙ Loading...</div>`;
-    const settings = await window.db_getSettings();
-    key = settings?.claudeApiKey || '';
-    if(key) window._state.settings = {...(window._state.settings||{}), ...settings};
+ if(zone) zone.innerHTML = `<div class="slip-uz-scanning">⚙ Loading...</div>`;
+ const settings = await window.db_getSettings();
+ key = settings?.claudeApiKey || '';
+ if(key) window._state.settings = {...(window._state.settings||{}), ...settings};
   }
   if(!key){
-    if(zone) zone.innerHTML = `<div class="slip-uz-icon">📷</div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
-    if(st) st.innerHTML = '<span style="color:var(--red);">⚠️ No API key set — ask your group admin to add it in the Admin tab.</span>';
-    return;
+ if(zone) zone.innerHTML = `<div class="slip-uz-icon"></div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+ if(st) st.innerHTML = '<span style="color:var(--red);"> No API key set — ask your group admin to add it in the Admin tab.</span>';
+ return;
   }
 
   // Show scanning state
   if(zone) zone.innerHTML = `<div class="slip-uz-scanning">⚙ Scanning slip...</div>`;
-  if(st)   st.innerHTML   = '';
+  if(st) st.innerHTML   = '';
   if(prev) prev.innerHTML = '';
 
   try {
     // Convert image to base64
-    const base64 = await new Promise((res, rej) => {
-      const reader = new FileReader();
-      reader.onload  = e => res(e.target.result.split(',')[1]);
-      reader.onerror = rej;
-      reader.readAsDataURL(file);
+ const base64 = await new Promise((res, rej) => {
+ const reader = new FileReader();
+ reader.onload  = e => res(e.target.result.split(',')[1]);
+ reader.onerror = rej;
+ reader.readAsDataURL(file);
     });
-    const mediaType = file.type||'image/jpeg';
+ const mediaType = file.type||'image/jpeg';
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
+ const resp = await fetch('https://api.anthropic.com/v1/messages', {
+ method: 'POST',
+ headers: {
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
         'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
+ body: JSON.stringify({
+ model: 'claude-haiku-4-5-20251001',
+ max_tokens: 1024,
+ messages: [{
+ role: 'user',
+ content: [
             { type:'image', source:{ type:'base64', media_type:mediaType, data:base64 } },
             { type:'text', text:`Parse this sports betting slip and return ONLY a JSON object (no explanation, no markdown, just raw JSON):
 {
@@ -3405,57 +3367,57 @@ Straight bets have 1 leg. Parlays have 2+ legs. Capture every leg. Be specific w
       })
     });
 
-    if(!resp.ok){
-      const err = await resp.json().catch(()=>({}));
-      throw new Error(err.error?.message || `API error ${resp.status}`);
+ if(!resp.ok){
+ const err = await resp.json().catch(()=>({}));
+ throw new Error(err.error?.message || `API error ${resp.status}`);
     }
-    const data = await resp.json();
-    const text = data.content?.[0]?.text || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if(!match) throw new Error('Could not parse response');
-    const parsed = JSON.parse(match[0]);
+ const data = await resp.json();
+ const text = data.content?.[0]?.text || '';
+ const match = text.match(/\{[\s\S]*\}/);
+ if(!match) throw new Error('Could not parse response');
+ const parsed = JSON.parse(match[0]);
 
     // ── Fill in the form ──────────────────────────────────
-    setBetType(parsed.betType==='parlay' ? 'parlay' : 'straight');
-    builtLegs = [];
-    legGame   = null;
+ setBetType(parsed.betType==='parlay' ? 'parlay' : 'straight');
+ builtLegs = [];
+ legGame   = null;
 
     (parsed.legs||[]).forEach(leg => {
-      builtLegs.push({ id:uid(), type:'game', pick: leg.pick||'', _gameName: leg.gameName||'', _sport: leg.sport||'', _league: leg.league||'', _gameDate: leg.gameDate||'' });
+ builtLegs.push({ id:uid(), type:'game', pick: leg.pick||'', _gameName: leg.gameName||'', _sport: leg.sport||'', _league: leg.league||'', _gameDate: leg.gameDate||'' });
     });
-    renderBuiltLegs();
+ renderBuiltLegs();
 
-    if(parsed.wager)  document.getElementById('bet-amount').value = parseFloat(parsed.wager).toFixed(2);
-    if(parsed.odds)   document.getElementById('bet-odds').value   = parsed.odds;
+ if(parsed.wager)  document.getElementById('bet-amount').value = parseFloat(parsed.wager).toFixed(2);
+ if(parsed.odds) document.getElementById('bet-odds').value   = parsed.odds;
     // Notes intentionally not pre-filled — user adds their own notes
 
     // Auto-link ESPN games
-    if(st) st.innerHTML = '<span style="color:var(--muted);">🔍 Linking games on ESPN...</span>';
-    const linkDebug = await autoLinkGames(builtLegs);
-    renderBuiltLegs();
+ if(st) st.innerHTML = '<span style="color:var(--muted);"> Linking games on ESPN...</span>';
+ const linkDebug = await autoLinkGames(builtLegs);
+ renderBuiltLegs();
 
     // Show image preview
-    const url = URL.createObjectURL(file);
-    if(prev) prev.innerHTML = `<img src="${url}" alt="Bet slip">`;
+ const url = URL.createObjectURL(file);
+ if(prev) prev.innerHTML = `<img src="${url}" alt="Bet slip">`;
 
     // Restore zone
-    if(zone) zone.innerHTML = `<div class="slip-uz-icon">✅</div><div class="slip-uz-title">Slip Scanned</div><div class="slip-uz-sub">Tap to scan a different slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
-    const linked = builtLegs.filter(l=>l.game).length;
-    const legWord = builtLegs.length!==1?'legs':'leg';
-    let statusHtml = '';
-    if(linked === builtLegs.length && linked > 0)
-      statusHtml = `<span style="color:var(--green);">✅ ${builtLegs.length} ${legWord} extracted &amp; ${linked} game${linked!==1?'s':''} linked — review and hit Add to Ladder.</span>`;
-    else if(linked > 0)
-      statusHtml = `<span style="color:var(--green);">✅ ${builtLegs.length} ${legWord} extracted, ${linked} auto-linked. Link remaining games manually.</span>`;
-    else
-      statusHtml = `<span style="color:var(--gold);">✅ ${builtLegs.length} ${legWord} extracted — link games manually using the search below each leg.</span>`;
+ if(zone) zone.innerHTML = `<div class="slip-uz-icon"></div><div class="slip-uz-title">Slip Scanned</div><div class="slip-uz-sub">Tap to scan a different slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+ const linked = builtLegs.filter(l=>l.game).length;
+ const legWord = builtLegs.length!==1?'legs':'leg';
+ let statusHtml = '';
+ if(linked === builtLegs.length && linked > 0)
+ statusHtml = `<span style="color:var(--green);"> ${builtLegs.length} ${legWord} extracted &amp; ${linked} game${linked!==1?'s':''} linked — review and hit Add to Ladder.</span>`;
+ else if(linked > 0)
+ statusHtml = `<span style="color:var(--green);"> ${builtLegs.length} ${legWord} extracted, ${linked} auto-linked. Link remaining games manually.</span>`;
+ else
+ statusHtml = `<span style="color:var(--gold);"> ${builtLegs.length} ${legWord} extracted — link games manually using the search below each leg.</span>`;
 
-    if(st) st.innerHTML = statusHtml;
+ if(st) st.innerHTML = statusHtml;
 
   } catch(e) {
-    console.error('Slip scan error:', e);
-    if(zone) zone.innerHTML = `<div class="slip-uz-icon">📷</div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Tap to try again</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
-    if(st)   st.innerHTML   = `<span style="color:var(--red);">❌ ${esc(e.message)}</span>`;
+ console.error('Slip scan error:', e);
+ if(zone) zone.innerHTML = `<div class="slip-uz-icon"></div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Tap to try again</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;
+ if(st) st.innerHTML   = `<span style="color:var(--red);"> ${esc(e.message)}</span>`;
   }
 }
 
@@ -3465,24 +3427,24 @@ Straight bets have 1 leg. Parlays have 2+ legs. Capture every leg. Be specific w
 // Comprehensive league lookup — returns array of {sport,league,label} to try
 const LEAGUE_LOOKUP = [
   // ── American sports ──────────────────────────────────────
-  { keys:['nfl','national football league'], sport:'football',   league:'nfl',                    label:'NFL' },
-  { keys:['nba','national basketball'],      sport:'basketball', league:'nba',                    label:'NBA' },
-  { keys:['mlb','major league baseball'],    sport:'baseball',   league:'mlb',                    label:'MLB' },
-  { keys:['nhl','national hockey league'],   sport:'hockey',     league:'nhl',                    label:'NHL' },
+  { keys:['nfl','national football league'], sport:'football', league:'nfl', label:'NFL' },
+  { keys:['nba','national basketball'], sport:'basketball', league:'nba', label:'NBA' },
+  { keys:['mlb','major league baseball'], sport:'baseball', league:'mlb', label:'MLB' },
+  { keys:['nhl','national hockey league'], sport:'hockey', league:'nhl', label:'NHL' },
   { keys:['ncaab','ncaa basketball','ncaa b','college basketball','mens college basketball',"men's college basketball",'ncaa men','ncaa hoops','college hoops'], sport:'basketball', league:'mens-college-basketball', label:'NCAAB' },
-  { keys:['ncaaf','ncaa football','ncaa f','college football'],  sport:'football',   league:'college-football',       label:'NCAAF' },
+  { keys:['ncaaf','ncaa football','ncaa f','college football'],  sport:'football', league:'college-football', label:'NCAAF' },
   // ── Soccer ───────────────────────────────────────────────
-  { keys:['premier league','epl','english premier','barclays'], sport:'soccer', league:'eng.1',          label:'EPL' },
-  { keys:['mls','major league soccer'],                         sport:'soccer', league:'usa.1',          label:'MLS' },
-  { keys:['la liga','laliga','spanish'],                         sport:'soccer', league:'esp.1',          label:'La Liga' },
-  { keys:['bundesliga','german'],                                sport:'soccer', league:'ger.1',          label:'Bundesliga' },
-  { keys:['serie a','italian','calcio'],                         sport:'soccer', league:'ita.1',          label:'Serie A' },
-  { keys:['ligue 1','french','ligue1'],                          sport:'soccer', league:'fra.1',          label:'Ligue 1' },
-  { keys:['champions league','ucl','uefa champions'],            sport:'soccer', league:'uefa.champions', label:'UCL' },
-  { keys:['europa league','uel'],                                sport:'soccer', league:'uefa.europa',    label:'Europa' },
-  { keys:['fa cup'],                                             sport:'soccer', league:'eng.fa',         label:'FA Cup' },
+  { keys:['premier league','epl','english premier','barclays'], sport:'soccer', league:'eng.1', label:'EPL' },
+  { keys:['mls','major league soccer'], sport:'soccer', league:'usa.1', label:'MLS' },
+  { keys:['la liga','laliga','spanish'], sport:'soccer', league:'esp.1', label:'La Liga' },
+  { keys:['bundesliga','german'], sport:'soccer', league:'ger.1', label:'Bundesliga' },
+  { keys:['serie a','italian','calcio'], sport:'soccer', league:'ita.1', label:'Serie A' },
+  { keys:['ligue 1','french','ligue1'], sport:'soccer', league:'fra.1', label:'Ligue 1' },
+  { keys:['champions league','ucl','uefa champions'], sport:'soccer', league:'uefa.champions', label:'UCL' },
+  { keys:['europa league','uel'], sport:'soccer', league:'uefa.europa', label:'Europa' },
+  { keys:['fa cup'], sport:'soccer', league:'eng.fa', label:'FA Cup' },
   // fallback: generic soccer tries all common leagues
-  { keys:['soccer','football league'],                           sport:'soccer', league:'eng.1',          label:'EPL', _soccerFallback:true },
+  { keys:['soccer','football league'], sport:'soccer', league:'eng.1', label:'EPL', _soccerFallback:true },
 ];
 
 // Returns array of ESPN {sport,league,label} candidates to try (most specific first)
@@ -3495,24 +3457,24 @@ function guessLeagues(leagueStr, gameName){
   const seen = new Set();
   const results = [];
   for(const entry of LEAGUE_LOOKUP){
-    if(entry._soccerFallback) continue; // handle separately
-    if(entry.keys.some(k => combined.includes(k))){
-      const key = entry.sport+'/'+entry.league;
-      if(!seen.has(key)){ seen.add(key); results.push(entry); }
+ if(entry._soccerFallback) continue; // handle separately
+ if(entry.keys.some(k => combined.includes(k))){
+ const key = entry.sport+'/'+entry.league;
+ if(!seen.has(key)){ seen.add(key); results.push(entry); }
     }
   }
   // If we got a soccer match but it's generic, add all other soccer leagues as fallbacks
   if(results.some(r=>r.sport==='soccer') && results.length===1){
-    LEAGUE_LOOKUP.filter(e=>e.sport==='soccer'&&!e._soccerFallback&&!seen.has(e.sport+'/'+e.league))
+ LEAGUE_LOOKUP.filter(e=>e.sport==='soccer'&&!e._soccerFallback&&!seen.has(e.sport+'/'+e.league))
       .forEach(e=>{ seen.add(e.sport+'/'+e.league); results.push(e); });
   }
   // If nothing matched but we can guess from sport keyword
   if(!results.length){
-    for(const entry of LEAGUE_LOOKUP){
-      if(entry._soccerFallback) continue;
-      if(entry.keys.some(k => s.includes(k.split(' ')[0]))){
-        const key=entry.sport+'/'+entry.league;
-        if(!seen.has(key)){ seen.add(key); results.push(entry); }
+ for(const entry of LEAGUE_LOOKUP){
+ if(entry._soccerFallback) continue;
+ if(entry.keys.some(k => s.includes(k.split(' ')[0]))){
+ const key=entry.sport+'/'+entry.league;
+ if(!seen.has(key)){ seen.add(key); results.push(entry); }
       }
     }
   }
@@ -3527,13 +3489,13 @@ function scoreGameMatch(gameName, espnEvent){
   // Split game name into meaningful tokens (skip short words like "vs", "at", "the")
   const words = q.split(/[\s,@&\.\/]+/).filter(w=>w.length>2&&w!=='vs.'&&w!=='vs');
   words.forEach(word=>{
-    if(evName.includes(word)) score+=1;
-    cs.forEach(c=>{
-      const tFull=(c.team?.displayName||'').toLowerCase();
-      const tLoc =(c.team?.location||'').toLowerCase();
-      const tAbbr=(c.team?.abbreviation||'').toLowerCase();
-      if(tFull.includes(word)||tLoc.includes(word)) score+=2;
-      if(word===tAbbr) score+=3;
+ if(evName.includes(word)) score+=1;
+ cs.forEach(c=>{
+ const tFull=(c.team?.displayName||'').toLowerCase();
+ const tLoc =(c.team?.location||'').toLowerCase();
+ const tAbbr=(c.team?.abbreviation||'').toLowerCase();
+ if(tFull.includes(word)||tLoc.includes(word)) score+=2;
+ if(word===tAbbr) score+=3;
     });
   });
   return score;
@@ -3543,94 +3505,94 @@ function scoreGameMatch(gameName, espnEvent){
 async function autoLinkGames(legs){
   const debugLog = [];
   for(const leg of legs){
-    const dbg = {
-      gameName: leg._gameName||'',
-      league:   leg._league||leg._sport||'',
-      date:     leg._gameDate||'',
-      candidates: [],
-      searched: 0,
-      bestScore: 0,
-      bestGame: '',
-      linked: false,
-      skipped: false,
+ const dbg = {
+ gameName: leg._gameName||'',
+ league: leg._league||leg._sport||'',
+ date: leg._gameDate||'',
+ candidates: [],
+ searched: 0,
+ bestScore: 0,
+ bestGame: '',
+ linked: false,
+ skipped: false,
     };
 
-    if(!leg._gameName||leg.game){ dbg.skipped=true; debugLog.push(dbg); continue; }
+ if(!leg._gameName||leg.game){ dbg.skipped=true; debugLog.push(dbg); continue; }
 
-    const leagueCandidates = guessLeagues(leg._sport||leg._league||'', leg._gameName);
-    dbg.candidates = leagueCandidates.map(c=>c.label);
+ const leagueCandidates = guessLeagues(leg._sport||leg._league||'', leg._gameName);
+ dbg.candidates = leagueCandidates.map(c=>c.label);
 
     // Date candidates: extracted date first, then nearby
-    const baseDateStr = leg._gameDate ? leg._gameDate.replace(/-/g,'') : getTodayStr();
-    const todayStr = getTodayStr();
-    const tom = new Date(); tom.setDate(tom.getDate()+1);
-    const tomorrowStr = `${tom.getFullYear()}${String(tom.getMonth()+1).padStart(2,'0')}${String(tom.getDate()).padStart(2,'0')}`;
-    const yst = new Date(); yst.setDate(yst.getDate()-1);
-    const yestStr = `${yst.getFullYear()}${String(yst.getMonth()+1).padStart(2,'0')}${String(yst.getDate()).padStart(2,'0')}`;
-    const dates = [...new Set([baseDateStr, todayStr, tomorrowStr, yestStr])];
+ const baseDateStr = leg._gameDate ? leg._gameDate.replace(/-/g,'') : getTodayStr();
+ const todayStr = getTodayStr();
+ const tom = new Date(); tom.setDate(tom.getDate()+1);
+ const tomorrowStr = `${tom.getFullYear()}${String(tom.getMonth()+1).padStart(2,'0')}${String(tom.getDate()).padStart(2,'0')}`;
+ const yst = new Date(); yst.setDate(yst.getDate()-1);
+ const yestStr = `${yst.getFullYear()}${String(yst.getMonth()+1).padStart(2,'0')}${String(yst.getDate()).padStart(2,'0')}`;
+ const dates = [...new Set([baseDateStr, todayStr, tomorrowStr, yestStr])];
 
-    let bestMatch=null, bestScore=0;
+ let bestMatch=null, bestScore=0;
 
     // ── Pass 1: targeted search when league was identified ────────────────
-    if(leagueCandidates.length){
-      outer: for(const sp of leagueCandidates){
-        for(const dateStr of dates){
-          try{
-            const board = await getBoard(sp.sport, sp.league, dateStr);
-            dbg.searched += (board.events||[]).length;
-            for(const ev of (board.events||[])){
-              const score = scoreGameMatch(leg._gameName, ev);
-              if(score>bestScore){ bestScore=score; bestMatch={ev,sp}; }
+ if(leagueCandidates.length){
+ outer: for(const sp of leagueCandidates){
+ for(const dateStr of dates){
+ try{
+ const board = await getBoard(sp.sport, sp.league, dateStr);
+ dbg.searched += (board.events||[]).length;
+ for(const ev of (board.events||[])){
+ const score = scoreGameMatch(leg._gameName, ev);
+ if(score>bestScore){ bestScore=score; bestMatch={ev,sp}; }
             }
-            if(bestScore>=4) break outer;
+ if(bestScore>=4) break outer;
           }catch(e){}
         }
       }
     }
 
     // ── Pass 2: broad fallback — scan ALL sports when league wasn't
-    //    identified or targeted search found nothing confident.
-    if(bestScore<3){
-      const fallbackDates=[...new Set([baseDateStr,todayStr,tomorrowStr])];
-      for(const dateStr of fallbackDates){
-        const fetches=SPORTS.map(sp=>
-          getBoard(sp.sport,sp.league,dateStr)
+    // identified or targeted search found nothing confident.
+ if(bestScore<3){
+ const fallbackDates=[...new Set([baseDateStr,todayStr,tomorrowStr])];
+ for(const dateStr of fallbackDates){
+ const fetches=SPORTS.map(sp=>
+ getBoard(sp.sport,sp.league,dateStr)
             .then(board=>({board,sp}))
             .catch(()=>({board:{events:[]},sp}))
         );
-        const results=await Promise.all(fetches);
-        for(const{board,sp}of results){
-          dbg.searched += (board.events||[]).length;
-          for(const ev of(board.events||[])){
-            const score=scoreGameMatch(leg._gameName,ev);
-            if(score>bestScore){bestScore=score;bestMatch={ev,sp};}
+ const results=await Promise.all(fetches);
+ for(const{board,sp}of results){
+ dbg.searched += (board.events||[]).length;
+ for(const ev of(board.events||[])){
+ const score=scoreGameMatch(leg._gameName,ev);
+ if(score>bestScore){bestScore=score;bestMatch={ev,sp};}
           }
         }
-        if(bestScore>=4) break;
+ if(bestScore>=4) break;
       }
     }
 
-    dbg.bestScore = bestScore;
-    dbg.bestGame  = bestMatch?.ev?.name||'';
+ dbg.bestScore = bestScore;
+ dbg.bestGame  = bestMatch?.ev?.name||'';
 
     // Require a strong match: at least one full team name token must match (score >= 3)
-    if(bestMatch && bestScore>=3){
-      dbg.linked = true;
-      const {ev, sp:mSp} = bestMatch;
-      const comp = ev.competitions?.[0];
-      const cs   = comp?.competitors||[];
-      const home = cs.find(c=>c.homeAway==='home'), away=cs.find(c=>c.homeAway==='away');
-      leg.game = {
-        espnId:ev.id, sport:mSp.sport, league:mSp.league, sportLabel:mSp.label,
-        name:ev.name, shortName:ev.shortName,
-        homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
-        awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
-        homeScore:home?.score||'—', awayScore:away?.score||'—',
-        statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'',
-        date:ev.date,
+ if(bestMatch && bestScore>=3){
+ dbg.linked = true;
+ const {ev, sp:mSp} = bestMatch;
+ const comp = ev.competitions?.[0];
+ const cs   = comp?.competitors||[];
+ const home = cs.find(c=>c.homeAway==='home'), away=cs.find(c=>c.homeAway==='away');
+ leg.game = {
+ espnId:ev.id, sport:mSp.sport, league:mSp.league, sportLabel:mSp.label,
+ name:ev.name, shortName:ev.shortName,
+ homeTeam:home?.team?.abbreviation||'', homeFullName:home?.team?.displayName||'', homeLocation:home?.team?.location||'',
+ awayTeam:away?.team?.abbreviation||'', awayFullName:away?.team?.displayName||'', awayLocation:away?.team?.location||'',
+ homeScore:home?.score||'—', awayScore:away?.score||'—',
+ statusName:comp?.status?.type?.name||'', shortDetail:comp?.status?.type?.shortDetail||'',
+ date:ev.date,
       };
     }
-    debugLog.push(dbg);
+ debugLog.push(dbg);
   }
   return debugLog;
 }

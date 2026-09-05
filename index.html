@@ -1730,9 +1730,17 @@ function renderBuiltLegs(){
 // ════════════════════════════════════════════════════════
 // MAIN RENDER (called by Firestore listeners)
 // ════════════════════════════════════════════════════════
+// Firestore snapshots can fire while the user is mid-scroll (e.g. the 60s score
+// refresh's writes, or anyone else's action). Skip the forced restore for a beat
+// after a real user scroll/touch so it never fights a gesture in progress.
+let _lastUserScrollAt = 0;
+window.addEventListener('scroll', ()=>{ _lastUserScrollAt = Date.now(); }, {passive:true});
+window.addEventListener('touchmove', ()=>{ _lastUserScrollAt = Date.now(); }, {passive:true});
+
 window.render = function(){
   // Preserve scroll position so Firestore re-renders don't jump the page
   const savedScroll = window.scrollY;
+  const scrolledRecently = Date.now() - _lastUserScrollAt < 1200;
   renderProgress();
   renderStats();
   renderLadder();
@@ -1748,8 +1756,15 @@ window.render = function(){
   const hasBets = (window._state?.bets||[]).length > 0;
   const btn = document.getElementById('end-ladder-btn');
   if(btn) btn.disabled = !hasBets;
-  // Restore scroll after DOM update
-  if(savedScroll > 0) window.scrollTo(0, savedScroll);
+  // Restore scroll after the DOM update, once the browser has actually laid out the
+  // new content (a plain scrollTo right here can get clamped to the pre-update page
+  // height and only "half" apply). Skipped entirely if the user is actively scrolling.
+  if(savedScroll > 0 && !scrolledRecently){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      if(Date.now() - _lastUserScrollAt < 1200) return; // they started scrolling since
+      window.scrollTo(0, savedScroll);
+    }));
+  }
 };
 
 const fmt = n => '$'+parseFloat(n||0).toFixed(2);

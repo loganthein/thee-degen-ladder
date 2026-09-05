@@ -650,7 +650,6 @@ textarea{resize:vertical;min-height:56px;}
 @media(max-width:640px){
   .tab-bar{position:fixed;bottom:0;left:0;right:0;top:auto;border-bottom:none;border-top:1px solid var(--border);background:var(--bg);z-index:200;padding-bottom:env(safe-area-inset-bottom);}
   .tab-btn{padding:.7rem .4rem .5rem;font-size:.58rem;}
-  .container{padding-bottom:12rem;padding-top:.8rem;}
 }
 @media(min-width:641px){
   .tab-bar{top:64px;}
@@ -693,14 +692,16 @@ textarea{resize:vertical;min-height:56px;}
   .logo{font-size:1rem;letter-spacing:1px;}
   .btn{padding:7px 12px;font-size:.8rem;}
   .sync-pill{display:none;}
-  .container{padding:.8rem;}
+  .container{padding:.8rem .8rem 6rem;}
   /* Stats */
-  .stats-bar{grid-template-columns:1fr 1fr;gap:1px;}
+  .stats-bar{grid-template-columns:1fr 1fr;gap:1px;margin-bottom:.7rem;}
   .stat-card{padding:.6rem .8rem;}
   .stat-value{font-size:1.15rem;}
   .stat-label{font-size:.55rem;}
+  /* Order toggle */
+  .order-toggle{margin-bottom:.7rem;}
   /* Progress bubbles — horizontally scrollable on mobile */
-  .progress-block{padding:.7rem .75rem;}
+  .progress-block{padding:.7rem .75rem;margin-bottom:.8rem;}
   .bubble-wrap{min-width:64px;padding:6px 8px;}
   .bubble-wrap.bc-active{padding:8px 10px;}
   .bubble-avatar{width:32px;height:32px;font-size:.66rem;}
@@ -714,8 +715,18 @@ textarea{resize:vertical;min-height:56px;}
   .rung-actions{gap:5px;}
   .btn-sm{padding:4px 9px;font-size:.72rem;}
   .abc-stats-row{grid-template-columns:1fr;gap:.5rem;}
-  .abc-body{grid-template-columns:1fr;}
   .abc-right{flex-direction:row;flex-wrap:wrap;}
+  /* Active bet card — tighter on mobile so it fits without scrolling */
+  .rung-card.c-prominent{padding:.65rem .75rem;margin-bottom:.7rem;}
+  .abc-header{margin-bottom:8px;}
+  .abc-right{gap:.9rem;padding-top:.5rem;margin-top:.5rem;}
+  .legs-wrap{margin-top:6px;}
+  .leg{margin-bottom:5px;}
+  .score-w{margin-top:5px;padding-top:5px;}
+  .sw-team{min-width:36px;}
+  .sw-score{font-size:1.4rem;}
+  .likelihood-block{margin-top:10px;}
+  .abc-footer{margin-top:8px;}
   /* Leaderboard */
   .lb-grid{grid-template-columns:1fr 1fr;gap:.6rem;}
   .lb-card{padding:.8rem .9rem;}
@@ -2083,7 +2094,7 @@ function activeBetCardHTML(bet, i){
     <div class="rung-card c-prominent ${bet.status==='active'?'c-active':''}" id="card-${bet.id}">
       <div class="abc-header">
         <div class="abc-who">
- ${avatarHtml(bet.person, avatarCls, 'width:44px;height:44px;font-size:.8rem;')}
+ ${avatarHtml(bet.person, avatarCls, 'width:36px;height:36px;font-size:.72rem;')}
           <div>
             <div class="abc-name">${esc(bet.person||'Unknown')}</div>
  ${bet.desc?`<div class="abc-desc">${esc(bet.desc)}</div>`:''}

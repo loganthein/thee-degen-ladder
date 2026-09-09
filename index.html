@@ -2753,11 +2753,14 @@ function openAddBetModal(){
   // Auto-select next person in rotation
   const nextP = getNextPerson();
   if(nextP) document.getElementById('bet-person').value = nextP;
-  // Auto-populate wager: roll over from last won bet's payout, otherwise default $20
+  // Auto-populate wager: roll over the ENTIRE last won bet — original stake plus
+  // profit (bet.payout is stored as profit-only, same as the American-odds payout
+  // calc elsewhere) — otherwise default $20. Rolling over payout alone silently
+  // dropped the stake from every rung's wager.
   const activeBets = window._state?.bets||[];
   const lastWon = [...activeBets].filter(b=>b.status==='won').pop();
   const betAmtEl = document.getElementById('bet-amount');
-  if(betAmtEl) betAmtEl.value = (lastWon && lastWon.payout > 0) ? parseFloat(lastWon.payout).toFixed(2) : '20.00';
+  if(betAmtEl) betAmtEl.value = (lastWon && lastWon.payout > 0) ? (parseFloat(lastWon.amount||0)+parseFloat(lastWon.payout)).toFixed(2) : '20.00';
   // Reset slip scanner
   const slipZone = document.getElementById('slip-zone');
   if(slipZone) slipZone.innerHTML = `<div class="slip-uz-icon"></div><div class="slip-uz-title">Scan Bet Slip</div><div class="slip-uz-sub">Upload or take a photo of your DraftKings / Fanatics slip</div><input type="file" id="slip-file" accept="image/*" style="display:none" onchange="handleSlipUpload(this)">`;

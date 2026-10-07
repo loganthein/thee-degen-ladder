@@ -307,11 +307,12 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .det-val.green{color:var(--green);font-family:'DM Mono',monospace;}
 
 /* ── LEGS ── */
-.legs-wrap{margin-top:9px;}
+.legs-wrap{margin-top:9px;display:flex;flex-direction:column;gap:8px;}
+.legs-wrap.parlay-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px;}
 .legs-lbl{font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
-.leg{background:transparent;border:0;border-radius:0;padding:0;margin-bottom:7px;transition:border-color .2s;}
-.leg.lh{border-left:2px solid var(--green);padding-left:8px;}
-.leg.lp{border-left:2px solid #9b59b6;padding-left:8px;}
+.leg{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;transition:border-color .2s,background .2s;}
+.leg.lh{border-color:var(--green);background:var(--surface-green);}
+.leg.lp{border-left:3px solid #9b59b6;}
 .leg-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;}
 .leg-name{font-size:.84rem;font-weight:600;}
 .leg-pick{font-size:.78rem;color:var(--muted);margin-top:2px;}
@@ -320,7 +321,7 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .ltag-prop{background:var(--surface-purple);color:#b57bee;border:1px solid var(--border-purple);}
 
 /* ── SCORE WIDGET ── */
-.score-w{margin-top:6px;background:transparent;border:0;border-top:1px solid var(--border);border-radius:0;padding:7px 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.score-w{margin-top:8px;background:transparent;border:0;border-top:1px solid var(--border);border-radius:0;padding:7px 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .score-w.sh{border-top-color:var(--green);}
 .sw-teams{display:flex;align-items:center;gap:11px;}
 .sw-team{display:flex;flex-direction:column;align-items:center;min-width:44px;text-align:center;}
@@ -720,8 +721,9 @@ textarea{resize:vertical;min-height:56px;}
   .rung-card.c-prominent{padding:.65rem .75rem;margin-bottom:.7rem;}
   .abc-header{margin-bottom:8px;}
   .abc-right{gap:.9rem;padding-top:.5rem;margin-top:.5rem;}
-  .legs-wrap{margin-top:6px;}
-  .leg{margin-bottom:5px;}
+  .legs-wrap{margin-top:6px;gap:6px;}
+  .legs-wrap.parlay-box{padding:6px;}
+  .leg{padding:8px 9px;}
   .score-w{margin-top:5px;padding-top:5px;}
   .sw-team{min-width:36px;}
   .sw-score{font-size:1.4rem;}
@@ -1927,34 +1929,45 @@ function estimateLikelihood(bet){
   const legs=(bet.legs||[]).filter(l=>l.game);
   if(!legs.length) return oddsApiFallback(bet) || { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
 
-  const legProbs=[];
+  const determined=[]; // probabilities for legs whose game is live/final
+  let pendingCount=0;
   let usedRealWinProb=false, usedPaceHeuristic=false;
   legs.forEach(leg=>{
  const s=_scoreCache[leg.game.espnId]?.data;
- if(!s||s.statusName==='STATUS_SCHEDULED') return;
+ if(!s||s.statusName==='STATUS_SCHEDULED'){ pendingCount++; return; }
  const bs = leg.type==='prop' ? getPlayerPropStatus(leg,s) : getBetStatus(leg.pick,s,leg.game);
- if(!bs || (bs.covering!==true && bs.covering!==false)) return;
+ if(!bs || (bs.covering!==true && bs.covering!==false)){ pendingCount++; return; }
 
  if(bs.type==='spread' && s.winProb && isMoneylinePick(leg)){
  const favorsHome = pickFavorsHome(leg.pick, s, leg.game);
  if(favorsHome!==null){
- legProbs.push(clampProb(favorsHome?s.winProb.homePct:s.winProb.awayPct)/100);
+ determined.push(clampProb(favorsHome?s.winProb.homePct:s.winProb.awayPct)/100);
  usedRealWinProb=true;
  return;
       }
     }
- legProbs.push(bs.covering ? 0.85 : 0.12); // pace-based heuristic
+ determined.push(bs.covering ? 0.85 : 0.12); // pace-based heuristic
  usedPaceHeuristic=true;
   });
 
-  if(legProbs.length){
- const combined = legProbs.reduce((p,v)=>p*v, 1);
- const pct = Math.round(clampProb(combined*100));
- const source = usedRealWinProb ? 'Live win probability via ESPN'
-      : usedPaceHeuristic ? 'Live pace tracking' : 'Implied probability from odds';
- return { pct, source };
+  if(!determined.length){
+    // nothing live/final yet for any leg — fall back to the pregame signal (market
+    // odds, or the odds typed in for the bet) instead of a meaningless 0%/100%.
+    return oddsApiFallback(bet) || { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
   }
-  return oddsApiFallback(bet) || { pct: americanImplied(bet.odds), source:'Implied probability from odds' };
+
+  // At least one leg has live/final data. A leg that hasn't started yet gets a neutral
+  // 50% factored into the parlay math — previously it was skipped entirely, so a 2-leg
+  // parlay with one leg already won showed that leg's probability alone (e.g. 96%)
+  // instead of accounting for the other leg still being a coin flip.
+  const allProbs = [...determined, ...Array(pendingCount).fill(0.5)];
+  const combined = allProbs.reduce((p,v)=>p*v, 1);
+  const pct = Math.round(clampProb(combined*100));
+  const source = pendingCount
+    ? `${determined.length}/${legs.length} legs live — rest still pending`
+    : usedRealWinProb ? 'Live win probability via ESPN'
+    : usedPaceHeuristic ? 'Live pace tracking' : 'Implied probability from odds';
+  return { pct, source };
 }
 function renderLikelihoodBar(bet){
   const {pct,source}=estimateLikelihood(bet);
@@ -2082,7 +2095,7 @@ function legsBlockHTML(bet){
   if(!legs.length) return '';
   const isParlay=bet.betType==='parlay';
   return `
-    <div class="legs-wrap">
+    <div class="legs-wrap ${isParlay?'parlay-box':''}">
  ${legs.map((leg,li)=>`
         <div class="leg ${leg.type==='prop'?'lp':''}" id="leg-${bet.id}-${li}">
           <div class="leg-row">
@@ -2232,7 +2245,7 @@ function toggleRung(id){
  ${bet.status==='lost'?`<div class="det"><span class="det-lbl">Lost</span><span class="det-val" style="color:var(--red);">${fmt(bet.amount)}</span></div>`:''}
       </div>
  ${legs.length?`
-      <div class="legs-wrap">
+      <div class="legs-wrap ${isParlay?'parlay-box':''}">
  ${legs.map(leg=>`
           <div class="leg ${leg.type==='prop'?'lp':''}">
             <div class="leg-row">

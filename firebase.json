@@ -1,5 +1,6 @@
 {
   "storage": {
+    "bucket": "thee-degen-ladder.firebasestorage.app",
     "rules": "storage.rules"
   },
   "functions": {

@@ -1271,22 +1271,48 @@ async function getLiveScore(espnId,sport,league){
  const comp = d.header?.competitions?.[0]; if(!comp) return null;
  const cs = comp.competitors||[];
  const home = cs.find(c=>c.homeAway==='home'), away = cs.find(c=>c.homeAway==='away');
-    // Extract individual player stats from box score for player prop tracking
+    // Extract individual player stats from box score for player prop tracking.
+    // ESPN box scores split a team's players into several stat groups (e.g. football
+    // has separate "passing"/"rushing"/"receiving" tables that all reuse a "YDS"
+    // column header for different things) — a player can appear in more than one
+    // group (a RB with both rushing and receiving lines), so stats are merged into
+    // one row per athlete instead of the last group's row overwriting the rest.
  const playerStats = {};
     (d.boxscore?.players||[]).forEach(teamData => {
       (teamData.statistics||[]).forEach(sg => {
- const names = sg.names||[];
+ const cat = (sg.name||sg.type||sg.text||'').toLowerCase();
+ const names = sg.names||sg.labels||[];
         (sg.athletes||[]).forEach(a => {
  const name = (a.athlete?.displayName||'').toLowerCase();
  if(!name) return;
  const stats = a.stats||[];
  const get = k => { const i=names.indexOf(k); return i>=0?(parseFloat(stats[i])||0):null; };
- const row = {
- pts:get('PTS'), reb:get('REB'), ast:get('AST'), stl:get('STL'), blk:get('BLK'),
- h:get('H'), hr:get('HR'), k:get('K')??get('SO'), g:get('G')
-          };
- playerStats[name] = row;
- if(a.athlete?.id) playerStats['id:'+a.athlete.id] = row; // exact-ID lookup, no name-fuzzing
+ const ids = [name]; if(a.athlete?.id) ids.push('id:'+a.athlete.id); // exact-ID lookup, no name-fuzzing
+          ids.forEach(id => {
+ const row = playerStats[id] || (playerStats[id] = {});
+            if(cat.includes('passing')){
+ row.passYds=get('YDS'); row.passTD=get('TD');
+            } else if(cat.includes('rushing')){
+ row.rushYds=get('YDS'); row.rushTD=get('TD');
+            } else if(cat.includes('receiving')){
+ row.recYds=get('YDS'); row.rec=get('REC'); row.recTD=get('TD');
+            } else {
+              if(row.pts==null)    row.pts    = get('PTS');
+              if(row.reb==null)    row.reb    = get('REB');
+              if(row.ast==null)    row.ast    = get('AST');
+              if(row.stl==null)    row.stl    = get('STL');
+              if(row.blk==null)    row.blk    = get('BLK');
+              if(row['3pm']==null) row['3pm'] = get('3PM');
+              if(row.h==null)      row.h      = get('H');
+              if(row.hr==null)     row.hr     = get('HR');
+              if(row.rbi==null)    row.rbi    = get('RBI');
+              if(row.tb==null)     row.tb     = get('TB');
+              if(row.er==null)     row.er     = get('ER');
+              if(row.k==null)      row.k      = get('K') ?? get('SO');
+              if(row.g==null)      row.g      = get('G');
+              if(row.shots==null)  row.shots  = get('S') ?? get('SOG');
+            }
+          });
         });
       });
     });
@@ -1510,30 +1536,75 @@ function isHitting(pick, s, legGame) {
 }
 
 // ── Player prop detection ────────────────────────────────
+// Maps the structured "prop type" dropdown value (set when a leg is built via the
+// Prop market UI, stored as leg.propType) straight to a box-score stat key — far more
+// reliable than re-guessing the stat from freeform pick text.
+const PROP_TYPE_STAT_KEY = {
+  'Hits':'h','Total Bases':'tb','Home Run':'hr','RBIs':'rbi','Strikeouts':'k','Earned Runs':'er',
+  'Points':'pts','Rebounds':'reb','Assists':'ast','3PM':'3pm','Pts+Reb+Ast':'pra','Steals':'stl',
+  'Pass Yds':'passYds','Rush Yds':'rushYds','Rec Yds':'recYds','Receptions':'rec','Anytime TD':'anytimeTd',
+  'Anytime Goalscorer':'g','Shots':'shots',
+};
+const STAT_KEY_LABEL = {
+  rushRecYds:'YDS', pra:'PRA', passYds:'YDS', rushYds:'YDS', recYds:'YDS', rec:'REC',
+  passTD:'TD', rushTD:'TD', recTD:'TD', anytimeTd:'TD', tb:'TB', rbi:'RBI', er:'ER', '3pm':'3PM', shots:'SOG',
+};
+function statLabel(key){ return STAT_KEY_LABEL[key] || key.toUpperCase(); }
+// Fallback for picks with no structured propType (legacy bets, or "Custom Prop" freeform
+// text) — scans the WHOLE pick string for stat keywords, not just the text after the
+// number, since picks commonly read "<player> <stat description> Over <line>"
+// (e.g. "Bijan Robinson Rushing + Receiving Yards Over 110.5") rather than
+// "<player> Over <line> <stat>".
+function statKeyFromText(text){
+  const t = (text||'').toLowerCase();
+  if(/rush.*rec|rec.*rush|scrimmage/.test(t)) return 'rushRecYds';
+  if(/rush/.test(t) && /yd/.test(t)) return 'rushYds';
+  if(/rec(eiv|eption)?/.test(t) && /yd/.test(t)) return 'recYds';
+  if(/recept/.test(t)) return 'rec';
+  if(/pass/.test(t) && /yd/.test(t)) return 'passYds';
+  if(/anytime|touchdown|\btd\b/.test(t)) return 'anytimeTd';
+  if(/total\s*base/.test(t)) return 'tb';
+  if(/rbi/.test(t)) return 'rbi';
+  if(/earned\s*run/.test(t)) return 'er';
+  if(/3pm|three[\s-]*point|3[\s-]*pt/.test(t)) return '3pm';
+  if(/pts?\s*\+\s*reb\s*\+\s*ast|p\+r\+a/.test(t)) return 'pra';
+  if(/reb|board/.test(t)) return 'reb';
+  if(/ast|assist/.test(t)) return 'ast';
+  if(/stl|steal/.test(t)) return 'stl';
+  if(/blk|block/.test(t)) return 'blk';
+  if(/\bhr\b|home\s*run/.test(t)) return 'hr';
+  if(/shot/.test(t)) return 'shots';
+  if(/goal/.test(t)) return 'g';
+  if(/\bk\b|strikeout/.test(t)) return 'k';
+  if(/\bh\b|hit/.test(t)) return 'h';
+  return 'pts';
+}
 // Parses pick text like "Jaylen Brown Over 25.5 pts" → { playerName, isOver, line, statKey }
-function parsePlayerProp(pick){
+function parsePlayerProp(leg){
+  const pick = (leg?.pick||'').trim();
   if(!pick) return null;
-  const p = pick.toLowerCase().trim();
+  const p = pick.toLowerCase();
   const m = p.match(/^(.+?)\s+(over|under)\s+([\d.]+)/);
   if(!m) return null;
-  const playerName = m[1].trim();
+  const playerName = (leg?.player||m[1]).trim().toLowerCase();
   const isOver = m[2]==='over';
   const line = parseFloat(m[3]);
-  const rest = p.slice(p.indexOf(m[3])+m[3].length).trim();
-  let statKey = 'pts';
-  if(/reb|board/.test(rest)) statKey='reb';
-  else if(/ast|assist/.test(rest)) statKey='ast';
-  else if(/stl|steal/.test(rest)) statKey='stl';
-  else if(/blk|block/.test(rest)) statKey='blk';
-  else if(/hr|home\s*run/.test(rest)) statKey='hr';
-  else if(/\bh\b|hit/.test(rest)) statKey='h';
-  else if(/\bk\b|strikeout/.test(rest)) statKey='k';
-  else if(/\bg\b|goal/.test(rest)) statKey='g';
+  const statKey = (leg?.propType && PROP_TYPE_STAT_KEY[leg.propType]) || statKeyFromText(pick);
   return { playerName, isOver, line, statKey };
+}
+// Resolves a stat key against a merged box-score row — handles combined stats
+// (e.g. rush+rec yards) that aren't a single raw box-score column.
+function resolveStatValue(row, key){
+  if(!row) return null;
+  if(key==='rushRecYds') return (row.rushYds??0)+(row.recYds??0);
+  if(key==='pra') return (row.pts??0)+(row.reb??0)+(row.ast??0);
+  if(key==='anytimeTd') return (row.rushTD??0)+(row.recTD??0);
+  const v = row[key];
+  return v===undefined?null:v;
 }
 // Returns { type:'prop', covering, playerName, statKey, val, line, isOver, label } or null
 function getPlayerPropStatus(leg, s){
-  const prop = parsePlayerProp(leg?.pick||'');
+  const prop = parsePlayerProp(leg);
   if(!prop||!s?.playerStats) return null;
   const { playerName, isOver, line, statKey } = prop;
   const all = Object.keys(s.playerStats);
@@ -1545,13 +1616,13 @@ function getPlayerPropStatus(leg, s){
     || all.find(n=>n.includes(playerName)||playerName.includes(n))
     || (() => { const last=playerName.split(/\s+/).pop(); return last&&last.length>2?all.find(n=>n.split(/\s+/).pop()===last):null; })();
   if(!matched) return null;
-  const val = s.playerStats[matched][statKey];
+  const val = resolveStatValue(s.playerStats[matched], statKey);
   if(val===null||val===undefined) return null;
   const displayName = matched.startsWith('id:') ? (leg?.player||playerName) : matched;
   const scheduled = s.statusName==='STATUS_SCHEDULED';
-  if(scheduled) return { type:'prop', covering:null, playerName:displayName, statKey, val, line, isOver, label:`${isOver?'O':'U'} ${line} ${statKey.toUpperCase()} · ${val}` };
+  const sl = statLabel(statKey);
+  if(scheduled) return { type:'prop', covering:null, playerName:displayName, statKey, val, line, isOver, label:`${isOver?'O':'U'} ${line} ${sl} · ${val}` };
   const covering = isOver ? val>=line : val<line;
-  const sl = statKey.toUpperCase();
   const label = isOver
     ? (covering ? `✓ ${val} ${sl} · over ${line}` : `${val} ${sl} · need ${(line-val).toFixed(1)} more`)
     : (covering ? `✓ ${val} ${sl} · ${(line-val).toFixed(1)} to bust` : `✗ ${val} ${sl} · busted by ${(val-line).toFixed(1)}`);
@@ -1935,7 +2006,8 @@ function estimateLikelihood(bet){
   legs.forEach(leg=>{
  const s=_scoreCache[leg.game.espnId]?.data;
  if(!s||s.statusName==='STATUS_SCHEDULED'){ pendingCount++; return; }
- const bs = leg.type==='prop' ? getPlayerPropStatus(leg,s) : getBetStatus(leg.pick,s,leg.game);
+ const propStatus = getPlayerPropStatus(leg,s);
+ const bs = (leg.type==='prop'||propStatus) ? propStatus : getBetStatus(leg.pick,s,leg.game);
  if(!bs || (bs.covering!==true && bs.covering!==false)){ pendingCount++; return; }
 
  if(bs.type==='spread' && s.winProb && isMoneylinePick(leg)){
@@ -2681,7 +2753,7 @@ function applyScoreToEl(el, betId, li, leg, s){
   const totScore = (parseInt(s.homeScore)||0)+(parseInt(s.awayScore)||0);
   const totalRowHtml = isTotalBet&&(live||fin) ? `<div class="sw-total-row">Total: <b>${totScore}</b></div>` : '';
   const propRowHtml = isProp&&bs?.val!=null&&(live||fin)
-    ? `<div class="sw-total-row">${bs.playerName.replace(/\b\w/g,c=>c.toUpperCase())}: <b>${bs.val} ${bs.statKey.toUpperCase()}</b></div>`
+    ? `<div class="sw-total-row">${bs.playerName.replace(/\b\w/g,c=>c.toUpperCase())}: <b>${bs.val} ${statLabel(bs.statKey)}</b></div>`
     : '';
   el.innerHTML=`
     <div class="sw-teams">

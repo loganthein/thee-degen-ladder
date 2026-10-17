@@ -347,12 +347,18 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .sw-total-row b{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--text);letter-spacing:1px;margin-left:3px;}
 .sw-loading{color:var(--muted);font-size:.76rem;font-style:italic;}
 .sw-err{color:var(--red);font-size:.7rem;}
-.sw-situation{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-bottom:6px;}
 .prop-note{font-size:.78rem;color:#b57bee;margin-top:3px;font-style:italic;}
 
 /* ── GAME CAST ── */
 .gc-btn{display:block;width:100%;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px;font-size:.78rem;font-weight:600;color:var(--text);cursor:pointer;text-align:center;font-family:inherit;}
 .gc-btn:hover{border-color:var(--gold);}
+.sw-ticker{width:100%;margin-top:7px;padding:6px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;font-size:.74rem;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:6px;box-sizing:border-box;}
+.sw-ticker:hover{border-color:var(--gold);}
+.sw-ticker-pin{flex-shrink:0;}
+.sw-ticker-text{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.sw-ticker-dd{color:var(--text);font-weight:600;}
+.sw-ticker-play{color:var(--muted);}
+.sw-ticker-chev{flex-shrink:0;color:var(--muted);font-size:.8rem;}
 .gc-score{display:flex;align-items:center;justify-content:center;gap:1.8rem;margin:0 0 1.1rem;}
 .gc-team{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .gc-score-num{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;line-height:1;color:var(--text);}
@@ -2274,8 +2280,6 @@ function activeBetCardHTML(bet, i){
         </div>
       </div>
 
- ${renderLikelihoodBar(bet)}
-
  ${bet.notes?`<div class="rung-note">${esc(bet.notes)}</div>`:''}
 
       <div class="abc-footer">
@@ -2823,33 +2827,45 @@ function applyScoreToEl(el, betId, li, leg, s){
   const propRowHtml = isProp&&bs?.val!=null&&(live||fin)
     ? `<div class="sw-total-row">${bs.playerName.replace(/\b\w/g,c=>c.toUpperCase())}: <b>${bs.val} ${statLabel(bs.statKey)}</b></div>`
     : '';
-  // One compact line of down-&-distance context (football only) — the rest of the live
-  // feed (current drive detail, win probability, recent plays) lives behind the Game
-  // Cast button so the card itself doesn't grow. A parlay can have several legs on the
-  // SAME game (e.g. a total + a spread on one matchup) — only the first leg for a given
-  // game shows the situation line and button, so they don't repeat per leg.
+  // The live feed (drive detail, win probability, recent plays) lives behind a Game
+  // Cast trigger so the card itself doesn't grow much. A parlay can have several legs
+  // on the SAME game (e.g. a total + a spread on one matchup) — only the first leg for
+  // a given game shows the trigger, so it doesn't repeat per leg.
   const primary = isPrimaryGameLeg(betId, li, leg);
-  const situationHtml = live&&s.downDistance&&primary ? `<div class="sw-situation">${esc(s.downDistance)}</div>` : '';
   const hasBall = id => live && s.possessionTeamId && String(id)===String(s.possessionTeamId);
   const hasGameCastData = !!(s.winProb || s.currentDrive || s.downDistance || (s.recentPlays&&s.recentPlays.length));
-  const gcBtnHtml = (live||fin)&&hasGameCastData&&primary ? `<button class="gc-btn" onclick="openGameCast('${betId}',${li})">🖥️ Game Cast</button>` : '';
+  // While live, fold down-&-distance + the current drive's own detail (plays/yards/time)
+  // and the last play call into one tappable line instead of a separate situation line
+  // plus a standalone button — opens the same Game Cast modal either way.
+  const driveLine = [s.downDistance, s.currentDrive?.desc].filter(Boolean).join(' · ');
+  const lastPlay = s.recentPlays?.[0];
+  let gcTriggerHtml = '';
+  if(primary && hasGameCastData){
+    if(live && (driveLine||lastPlay)){
+      gcTriggerHtml = `<div class="sw-ticker" onclick="openGameCast('${betId}',${li})">
+        <span class="sw-ticker-pin">📍</span>
+        <span class="sw-ticker-text">${driveLine?`<span class="sw-ticker-dd">${esc(driveLine)}</span>`:''}${lastPlay?`<span class="sw-ticker-play">${driveLine?' · ':''}"${esc(lastPlay.text)}"</span>`:''}</span>
+        <span class="sw-ticker-chev">›</span>
+      </div>`;
+    } else if(live||fin){
+      gcTriggerHtml = `<button class="gc-btn" onclick="openGameCast('${betId}',${li})">🖥️ Game Cast</button>`;
+    }
+  }
   el.innerHTML=`
- ${situationHtml}
     <div class="sw-teams">
       <div class="sw-team">${espnLogoChip(leg.game?.league,s.awayTeamId)}<div class="sw-abb">${esc(s.awayTeam)}${hasBall(s.awayTeamId)?' 🏈':''}</div><div class="sw-score ${aw&&(live||fin)?'winning':''}">${s.awayScore}</div></div>
       <div class="sw-vs">@</div>
       <div class="sw-team">${espnLogoChip(leg.game?.league,s.homeTeamId)}<div class="sw-abb">${esc(s.homeTeam)}${hasBall(s.homeTeamId)?' 🏈':''}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
     </div>
- ${totalRowHtml}${propRowHtml}
- ${indicatorHtml}
- ${gcBtnHtml}
     <div class="sw-meta">
       <div class="sw-status ${sCls}">${sTxt}</div>
       <div class="sw-detail">${esc(s.shortDetail)}</div>
       <div class="sw-refresh" onclick="refreshOne('${betId}',${li})">↻ refresh</div>
-    </div>`;
+    </div>
+ ${totalRowHtml}${propRowHtml}
+ ${indicatorHtml}
+ ${gcTriggerHtml}`;
   updateHitBadge(betId);
-  updateLikelihoodBar(betId);
 }
 
 // ════════════════════════════════════════════════════════

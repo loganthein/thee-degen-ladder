@@ -347,7 +347,31 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .sw-total-row b{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--text);letter-spacing:1px;margin-left:3px;}
 .sw-loading{color:var(--muted);font-size:.76rem;font-style:italic;}
 .sw-err{color:var(--red);font-size:.7rem;}
+.sw-situation{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-bottom:6px;}
 .prop-note{font-size:.78rem;color:#b57bee;margin-top:3px;font-style:italic;}
+
+/* ── GAME CAST ── */
+.gc-btn{display:block;width:100%;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px;font-size:.78rem;font-weight:600;color:var(--text);cursor:pointer;text-align:center;font-family:inherit;}
+.gc-btn:hover{border-color:var(--gold);}
+.gc-score{display:flex;align-items:center;justify-content:center;gap:1.8rem;margin:0 0 1.1rem;}
+.gc-team{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.gc-score-num{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;line-height:1;color:var(--text);}
+.gc-abb{font-size:.7rem;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;}
+.gc-mid{font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;max-width:110px;}
+.gc-drive{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.7rem .85rem;margin-bottom:1rem;}
+.gc-drive-main{font-weight:700;font-size:.9rem;}
+.gc-drive-sub{font-size:.75rem;color:var(--muted);margin-top:2px;}
+.gc-wp-label,.gc-plays-label{font-family:'DM Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;}
+.gc-plays-label{margin-top:1rem;}
+.gc-wp-bar{display:flex;height:30px;border-radius:7px;overflow:hidden;font-family:'DM Mono',monospace;font-weight:700;font-size:.82rem;}
+.gc-wp-home,.gc-wp-away{display:flex;align-items:center;justify-content:center;color:#fff;white-space:nowrap;overflow:hidden;}
+.gc-wp-home{background:var(--next);}
+.gc-wp-away{background:var(--green);}
+.gc-plays{max-height:230px;overflow-y:auto;}
+.gc-play{border-left:2px solid var(--border);padding:4px 0 8px 10px;font-size:.78rem;}
+.gc-play.scoring{border-left-color:var(--gold);}
+.gc-play-time{color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;margin-bottom:1px;}
+.gc-empty{color:var(--muted);font-size:.8rem;font-style:italic;padding:1rem 0;text-align:center;}
 
 .rung-note{margin-top:7px;font-size:.79rem;color:var(--muted);font-style:italic;border-top:1px solid var(--border);padding-top:7px;}
 .rung-actions{margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;}
@@ -736,6 +760,9 @@ textarea{resize:vertical;min-height:56px;}
   /* Modals */
   .modal{padding:1.2rem;border-radius:10px;}
   .modal-title{font-size:1.3rem;margin-bottom:1rem;}
+  .gc-score{gap:1.2rem;margin-bottom:.8rem;}
+  .gc-score-num{font-size:1.7rem;}
+  .gc-plays{max-height:190px;}
   .frow{grid-template-columns:1fr;}
   /* Win banner */
   .win-title{font-size:2rem;}
@@ -1120,6 +1147,15 @@ textarea{resize:vertical;min-height:56px;}
 </div>
 </div>
 
+<!-- ═══════════════ GAME CAST MODAL ═══════════════ -->
+<div class="overlay" id="gamecast-modal">
+<div class="modal" style="max-width:420px;">
+  <div class="modal-title" style="margin-bottom:.9rem;">GAME CAST</div>
+  <div id="gamecast-body"></div>
+  <div class="mactions"><button class="btn btn-ghost" onclick="closeModal('gamecast-modal')">Close</button></div>
+</div>
+</div>
+
 <!-- ═══════════════ FRIENDS MODAL ═══════════════ -->
 <div class="overlay" id="friends-modal">
 <div class="modal">
@@ -1327,12 +1363,25 @@ async function getLiveScore(espnId,sport,league){
  winProb = { homePct, awayPct: 100-homePct };
       }
     }
+    // Current drive / down-&-distance (football) and a short recent-plays feed, used by
+    // the optional Game Cast view — both are best-effort since ESPN only publishes them
+    // for some sports/games.
+ const situation = d.situation || null;
+ const drive = d.drives?.current;
+ const currentDrive = drive ? { team:drive.team?.abbreviation||'', desc:drive.description||'' } : null;
+ const possessionTeamId = situation?.possession || drive?.team?.id || null;
+ const downDistance = situation?.possessionText || situation?.shortDownDistanceText || '';
+ const recentPlays = Array.isArray(d.plays) ? d.plays.slice(-6).reverse().map(p=>({
+ text:p.text||'', clock:p.clock?.displayValue||'',
+ period:p.period?.number?`Q${p.period.number}`:(p.period?.displayValue||''),
+ scoring:!!p.scoringPlay
+      })).filter(p=>p.text) : [];
  return { homeTeam:home?.team?.abbreviation||'?', homeScore:home?.score??'—',
  awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
  homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
  homeLocation:home?.team?.location||'', awayLocation:away?.team?.location||'',
  homeTeamId:home?.team?.id||'', awayTeamId:away?.team?.id||'',
- winProb,
+ winProb, currentDrive, possessionTeamId, downDistance, recentPlays,
  statusName:comp?.status?.type?.name||'',
  shortDetail:comp?.status?.type?.shortDetail||comp?.status?.type?.description||'',
  playerStats };
@@ -2707,9 +2756,11 @@ function espnLogoUrl(league, teamId){
   const bucket = /college|ncaa/.test(league||'') ? 'ncaa' : league;
   return `https://a.espncdn.com/i/teamlogos/${bucket}/500/${teamId}.png`;
 }
-function espnLogoChip(league, teamId){
+function espnLogoChip(league, teamId, size){
   const url = espnLogoUrl(league, teamId);
-  return url ? `<div class="sw-logo-chip"><img src="${url}" alt="" onerror="this.parentElement.remove()"></div>` : '';
+  if(!url) return '';
+  const sz = size||28, imgSz = Math.round(sz*0.72);
+  return `<div class="sw-logo-chip" style="width:${sz}px;height:${sz}px;"><img src="${url}" style="width:${imgSz}px;height:${imgSz}px;" alt="" onerror="this.parentElement.remove()"></div>`;
 }
 
 // Auto-promotes a pending bet to 'active' the moment its linked game goes live, and
@@ -2755,14 +2806,23 @@ function applyScoreToEl(el, betId, li, leg, s){
   const propRowHtml = isProp&&bs?.val!=null&&(live||fin)
     ? `<div class="sw-total-row">${bs.playerName.replace(/\b\w/g,c=>c.toUpperCase())}: <b>${bs.val} ${statLabel(bs.statKey)}</b></div>`
     : '';
+  // One compact line of down-&-distance context (football only) — the rest of the live
+  // feed (current drive detail, win probability, recent plays) lives behind the Game
+  // Cast button so the card itself doesn't grow.
+  const situationHtml = live&&s.downDistance ? `<div class="sw-situation">${esc(s.downDistance)}</div>` : '';
+  const hasBall = id => live && s.possessionTeamId && String(id)===String(s.possessionTeamId);
+  const hasGameCastData = !!(s.winProb || s.currentDrive || s.downDistance || (s.recentPlays&&s.recentPlays.length));
+  const gcBtnHtml = (live||fin)&&hasGameCastData ? `<button class="gc-btn" onclick="openGameCast('${betId}',${li})">🖥️ Game Cast</button>` : '';
   el.innerHTML=`
+ ${situationHtml}
     <div class="sw-teams">
-      <div class="sw-team">${espnLogoChip(leg.game?.league,s.awayTeamId)}<div class="sw-abb">${esc(s.awayTeam)}</div><div class="sw-score ${aw&&(live||fin)?'winning':''}">${s.awayScore}</div></div>
+      <div class="sw-team">${espnLogoChip(leg.game?.league,s.awayTeamId)}<div class="sw-abb">${esc(s.awayTeam)}${hasBall(s.awayTeamId)?' 🏈':''}</div><div class="sw-score ${aw&&(live||fin)?'winning':''}">${s.awayScore}</div></div>
       <div class="sw-vs">@</div>
-      <div class="sw-team">${espnLogoChip(leg.game?.league,s.homeTeamId)}<div class="sw-abb">${esc(s.homeTeam)}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
+      <div class="sw-team">${espnLogoChip(leg.game?.league,s.homeTeamId)}<div class="sw-abb">${esc(s.homeTeam)}${hasBall(s.homeTeamId)?' 🏈':''}</div><div class="sw-score ${hw&&(live||fin)?'winning':''}">${s.homeScore}</div></div>
     </div>
  ${totalRowHtml}${propRowHtml}
  ${indicatorHtml}
+ ${gcBtnHtml}
     <div class="sw-meta">
       <div class="sw-status ${sCls}">${sTxt}</div>
       <div class="sw-detail">${esc(s.shortDetail)}</div>
@@ -2770,6 +2830,49 @@ function applyScoreToEl(el, betId, li, leg, s){
     </div>`;
   updateHitBadge(betId);
   updateLikelihoodBar(betId);
+}
+
+// ════════════════════════════════════════════════════════
+// GAME CAST — click-in live view (drive, win prob, recent plays)
+// ════════════════════════════════════════════════════════
+// Kept out of the card itself so the ladder stays scannable: the card gets one
+// compact down-&-distance line (see situationHtml above) and a button; everything
+// heavier (drive detail, win-prob bar, play log) only renders once the user opts in.
+function openGameCast(betId, li){
+  const bet = (window._state?.bets||[]).find(b=>b.id===betId);
+  const leg = bet?.legs?.[li];
+  const g = leg?.game; if(!g) return;
+  const s = _scoreCache[g.espnId]?.data; if(!s) return;
+  document.getElementById('gamecast-body').innerHTML = renderGameCastBody(leg, s);
+  document.getElementById('gamecast-modal').classList.add('open');
+}
+function renderGameCastBody(leg, s){
+  const g = leg.game;
+  const scoreHtml = `
+    <div class="gc-score">
+      <div class="gc-team">${espnLogoChip(g.league,s.awayTeamId,46)}<div class="gc-score-num">${s.awayScore}</div><div class="gc-abb">${esc(s.awayTeam)}</div></div>
+      <div class="gc-mid">${esc(s.shortDetail)}</div>
+      <div class="gc-team">${espnLogoChip(g.league,s.homeTeamId,46)}<div class="gc-score-num">${s.homeScore}</div><div class="gc-abb">${esc(s.homeTeam)}</div></div>
+    </div>`;
+  const driveHtml = (s.downDistance||s.currentDrive) ? `
+    <div class="gc-drive">
+      ${s.downDistance?`<div class="gc-drive-main">${esc(s.downDistance)}</div>`:''}
+      ${s.currentDrive?.desc?`<div class="gc-drive-sub">${esc(s.currentDrive.desc)}</div>`:''}
+    </div>` : '';
+  const wpHtml = s.winProb ? `
+    <div class="gc-wp-label">Win Probability</div>
+    <div class="gc-wp-bar">
+      <div class="gc-wp-home" style="width:${s.winProb.homePct}%">${s.winProb.homePct}%</div>
+      <div class="gc-wp-away" style="width:${s.winProb.awayPct}%">${s.winProb.awayPct}%</div>
+    </div>` : '';
+  const playsHtml = s.recentPlays?.length ? `
+    <div class="gc-plays-label">Recent Plays</div>
+    <div class="gc-plays">${s.recentPlays.map(p=>`
+      <div class="gc-play${p.scoring?' scoring':''}">
+        <div class="gc-play-time">${esc(p.clock)}${p.period?` · ${esc(p.period)}`:''}</div>
+        ${esc(p.text)}
+      </div>`).join('')}</div>` : `<div class="gc-empty">No play-by-play available for this game.</div>`;
+  return scoreHtml + driveHtml + wpHtml + playsHtml;
 }
 
 async function loadScore(betId,li,leg){

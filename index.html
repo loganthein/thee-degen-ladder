@@ -1371,11 +1371,20 @@ async function getLiveScore(espnId,sport,league){
  const currentDrive = drive ? { team:drive.team?.abbreviation||'', desc:drive.description||'' } : null;
  const possessionTeamId = situation?.possession || drive?.team?.id || null;
  const downDistance = situation?.possessionText || situation?.shortDownDistanceText || '';
- const recentPlays = Array.isArray(d.plays) ? d.plays.slice(-6).reverse().map(p=>({
+    // ESPN exposes a flat top-level `plays` array for some sports (basketball/baseball),
+    // but football nests plays inside each drive instead (`drives.current.plays` /
+    // `drives.previous[].plays`) — fall back to flattening those when there's no
+    // top-level list.
+ let flatPlays = Array.isArray(d.plays) && d.plays.length ? d.plays : null;
+ if(!flatPlays){
+ const driveList = [...(d.drives?.previous||[]), ...(drive?[drive]:[])];
+ flatPlays = driveList.flatMap(dr=>dr.plays||[]);
+    }
+ const recentPlays = flatPlays.slice(-6).reverse().map(p=>({
  text:p.text||'', clock:p.clock?.displayValue||'',
  period:p.period?.number?`Q${p.period.number}`:(p.period?.displayValue||''),
  scoring:!!p.scoringPlay
-      })).filter(p=>p.text) : [];
+      })).filter(p=>p.text);
  return { homeTeam:home?.team?.abbreviation||'?', homeScore:home?.score??'—',
  awayTeam:away?.team?.abbreviation||'?', awayScore:away?.score??'—',
  homeFullName:home?.team?.displayName||'', awayFullName:away?.team?.displayName||'',
@@ -2776,6 +2785,14 @@ function maybeAutoGoLive(betId, live){
   maybeNotify('Game is live', `${bet.person}'s bet — ${bet.desc||'Bet'} — the game just started.`);
 }
 
+// True unless an earlier leg in the same bet already links to this same ESPN game —
+// used to dedupe the Game Cast button/situation line across parlay legs on one game.
+function isPrimaryGameLeg(betId, li, leg){
+  if(!leg.game) return true;
+  const legs = (window._state?.bets||[]).find(b=>b.id===betId)?.legs||[];
+  for(let i=0;i<li;i++){ if(legs[i]?.game?.espnId===leg.game.espnId) return false; }
+  return true;
+}
 function applyScoreToEl(el, betId, li, leg, s){
   if(!el) return;
   const hw=parseInt(s.homeScore)>parseInt(s.awayScore), aw=!hw&&parseInt(s.awayScore)>parseInt(s.homeScore);
@@ -2808,11 +2825,14 @@ function applyScoreToEl(el, betId, li, leg, s){
     : '';
   // One compact line of down-&-distance context (football only) — the rest of the live
   // feed (current drive detail, win probability, recent plays) lives behind the Game
-  // Cast button so the card itself doesn't grow.
-  const situationHtml = live&&s.downDistance ? `<div class="sw-situation">${esc(s.downDistance)}</div>` : '';
+  // Cast button so the card itself doesn't grow. A parlay can have several legs on the
+  // SAME game (e.g. a total + a spread on one matchup) — only the first leg for a given
+  // game shows the situation line and button, so they don't repeat per leg.
+  const primary = isPrimaryGameLeg(betId, li, leg);
+  const situationHtml = live&&s.downDistance&&primary ? `<div class="sw-situation">${esc(s.downDistance)}</div>` : '';
   const hasBall = id => live && s.possessionTeamId && String(id)===String(s.possessionTeamId);
   const hasGameCastData = !!(s.winProb || s.currentDrive || s.downDistance || (s.recentPlays&&s.recentPlays.length));
-  const gcBtnHtml = (live||fin)&&hasGameCastData ? `<button class="gc-btn" onclick="openGameCast('${betId}',${li})">🖥️ Game Cast</button>` : '';
+  const gcBtnHtml = (live||fin)&&hasGameCastData&&primary ? `<button class="gc-btn" onclick="openGameCast('${betId}',${li})">🖥️ Game Cast</button>` : '';
   el.innerHTML=`
  ${situationHtml}
     <div class="sw-teams">

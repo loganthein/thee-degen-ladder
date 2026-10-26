@@ -2476,9 +2476,12 @@ function impliedProbToOdds(prob){
 //     final rung, which has nothing left to compound into. Pressure and Impact are
 //     deliberately opposite in WHEN they reward a win (late vs. early) because they're
 //     rewarding two different things: surviving the moment vs. building the pot.
-// Risk, Difficulty, and Impact all exclude parlay bets' odds/payout ratios — a parlay's
-// number is the COMBINED result across every leg, not one pick's real difficulty or a
-// clean payout multiple to compare against a straight bet's.
+// Risk, Difficulty, and Impact all include parlays using their combined odds/payout —
+// a parlay's combined odds ARE the real, correctly-compounded probability of every leg
+// hitting together (e.g. three -150 favorites parlayed is genuinely a ~+180 underdog
+// bet on the whole, even though no single leg was one), so they're exactly as valid a
+// difficulty/risk figure as a straight bet's, and the payout is exactly as real a
+// dollar amount for Impact.
 function wilsonLowerBound(wins, n, z=1.96){
   if(n===0) return 0;
   const phat = wins/n;
@@ -2510,17 +2513,17 @@ function computeGamblerScores(){
  const winRate = won.length/decided;
  const winRateAdj = wilsonLowerBound(won.length, decided);
 
- const probArr = fb.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
+ const probArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
  const avgProb = probArr.length ? probArr.reduce((s,p)=>s+p,0)/probArr.length : 0.5;
  const risk = Math.min(1, Math.max(0, 1-avgProb));
 
- const difficultyVals = won.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(o=>1-oddsToImpliedProb(o));
+ const difficultyVals = won.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(o=>1-oddsToImpliedProb(o));
  const difficulty = difficultyVals.length ? difficultyVals.reduce((s,v)=>s+v,0)/difficultyVals.length : 0;
 
  const pressureVals = won.filter(b=>b._rungTotal>0).map(b=>b._rung/b._rungTotal);
  const pressure = pressureVals.length ? pressureVals.reduce((s,v)=>s+v,0)/pressureVals.length : 0;
 
- const impactVals = won.filter(b=>b.betType!=='parlay' && b._rungTotal>1).map(b=>{
+ const impactVals = won.filter(b=>b._rungTotal>1).map(b=>{
  const amt = parseFloat(b.amount)||0, payout = parseFloat(b.payout)||0;
  const ratio = amt>0 ? Math.min(1, (payout/amt)/5) : 0; // cap at a 5x profit multiple
  const earliness = (b._rungTotal-b._rung)/(b._rungTotal-1); // 1 = rung 1, 0 = last rung
@@ -2551,11 +2554,9 @@ function renderLeaderboard(){
  const totalWon  = won.reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
  const totalLost = lost.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
  const net = totalWon - totalLost;
-    // A parlay's odds are the COMBINED payout across every leg, not a single pick's
-    // actual risk — three -150 favorites parlayed together can show as +180 overall
-    // despite containing zero underdog picks. Only straight/freeform bets' odds
-    // represent one real risk decision, so only those count toward this average.
- const probArr = fb.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
+    // A parlay's combined odds ARE the real, correctly-compounded probability of every
+    // leg hitting together, so they're exactly as valid here as a straight bet's odds.
+ const probArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
  const avgProb = probArr.length ? probArr.reduce((s,p)=>s+p,0)/probArr.length : null;
  const avgOdds = avgProb!==null ? impliedProbToOdds(avgProb) : null;
  return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgProb, avgOdds };
@@ -2651,7 +2652,7 @@ function renderLeaderboard(){
         <summary>How it's calculated</summary>
         <div class="gs-formula-body">
           <div class="gs-formula-row"><b>35% Win rate</b> — your win % (shown as-is), but the score itself uses a sample-size-adjusted version so a couple of lucky bets can't outrank someone with a long, proven track record.</div>
-          <div class="gs-formula-row"><b>15% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlay odds don't count here — a parlay's combined payout isn't one real risk decision, only straight/single bets are.</div>
+          <div class="gs-formula-row"><b>15% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlays count using their combined odds — stacking legs together is a real, harder bet, even if every leg on its own was a favorite.</div>
           <div class="gs-formula-row"><b>20% Difficulty</b> — how hard the bets you actually WON were to win, scaled continuously by the odds (a +300 win counts for a lot more than a +105 win, not just "underdog = underdog").</div>
           <div class="gs-formula-row"><b>15% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts for a lot.</div>
           <div class="gs-formula-row"><b>15% Impact</b> — how much a win grew the ladder's compounding stake (payout ÷ wager), weighted by how many rungs were left after it to carry that growth forward. A big underdog hit on rung 1 funds every remaining rung — worth more to the team than the same payout on the last rung, which has nothing left to compound into.</div>

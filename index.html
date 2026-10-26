@@ -465,6 +465,7 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .st-net.pos{color:var(--green);}.st-net.neg{color:var(--red);}.st-net.neu{color:var(--muted);}
 .st-odds{font-weight:600;}
 .st-odds.dog{color:var(--green);}.st-odds.chalk{color:var(--muted);}
+.upset-tag{font-size:.68rem;margin-left:4px;white-space:nowrap;}
 .style-badge{display:inline-block;padding:2px 9px;border-radius:4px;font-size:.62rem;letter-spacing:.5px;font-weight:700;text-transform:uppercase;}
 .style-badge.agg{background:var(--surface-purple);color:#c084fc;border:1px solid var(--border-purple);}
 .style-badge.bal{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
@@ -2431,6 +2432,20 @@ async function moveRotation(idx, dir){
   renderRotationEditor();
 }
 
+// American odds don't average linearly — the scale is unbounded on the underdog
+// (positive) side but compressed on the favorite (negative) side, so a plain
+// arithmetic mean of raw odds numbers gets skewed hard by any single big-underdog
+// bet and doesn't mean what it looks like it means. Convert each bet to its implied
+// win probability first (a bounded, linear 0-100% scale), average THAT, then convert
+// the average back to a representative American-odds number just for familiar display.
+function oddsToImpliedProb(odds){
+  return odds > 0 ? 100/(odds+100) : -odds/(-odds+100);
+}
+function impliedProbToOdds(prob){
+  if(!(prob>0) || !(prob<1)) return null;
+  return prob > 0.5 ? -Math.round((prob/(1-prob))*100) : Math.round(((1-prob)/prob)*100);
+}
+
 // ── Leaderboard ───────────────────────────────────────
 function renderLeaderboard(){
   const grid = document.getElementById('lb-grid'); if(!grid) return;
@@ -2449,9 +2464,13 @@ function renderLeaderboard(){
  const totalWon  = won.reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
  const totalLost = lost.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
  const net = totalWon - totalLost;
- const oddsArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0);
- const avgOdds = oddsArr.length ? Math.round(oddsArr.reduce((s,o)=>s+o,0)/oddsArr.length) : null;
- return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgOdds };
+ const probArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
+ const avgProb = probArr.length ? probArr.reduce((s,p)=>s+p,0)/probArr.length : null;
+ const avgOdds = avgProb!==null ? impliedProbToOdds(avgProb) : null;
+    // Underdog (positive-odds) bets that actually hit — the real signal for "made a
+    // bold pick and it paid off," which a plain average odds number can't show.
+ const upsetWins = won.filter(b=>{ const o=parseInt(b.odds); return !isNaN(o)&&o>0; }).length;
+ return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgProb, avgOdds, upsetWins };
   }).filter(s=>s.total>0);
 
   // Overall team record (all people combined)
@@ -2481,18 +2500,23 @@ function renderLeaderboard(){
  const pa=ta?a.wins/ta:0, pb=tb?b.wins/tb:0;
  return pb-pa || b.wins-a.wins || b.net-a.net;
     });
- function styleBadge(avg){
- if(avg===null) return `<span class="style-badge bal">—</span>`;
- if(avg>=100) return `<span class="style-badge agg">Aggressive</span>`;
- if(avg>=-100)  return `<span class="style-badge bal">Balanced</span>`;
- if(avg>=-200)  return `<span class="style-badge con">Conservative</span>`;
- return             `<span class="style-badge chalk-h">Chalk Heavy</span>`;
+    // Thresholds run directly on implied probability (lower = more underdog-leaning
+    // picks = more aggressive) rather than round-tripping back through odds.
+ function styleBadge(avgProb){
+ if(avgProb===null) return `<span class="style-badge bal">—</span>`;
+ if(avgProb<=0.45) return `<span class="style-badge agg">Aggressive</span>`;
+ if(avgProb<=0.55) return `<span class="style-badge bal">Balanced</span>`;
+ if(avgProb<=0.65) return `<span class="style-badge con">Conservative</span>`;
+ return                  `<span class="style-badge chalk-h">Chalk Heavy</span>`;
     }
- function fmtOdds(avg){
- if(avg===null) return `<span class="st-odds">—</span>`;
- const cls = avg>0?'dog':'chalk';
- const s   = avg>0?`+${avg}`:String(avg);
- return `<span class="st-odds ${cls}">${s}</span>`;
+ function fmtOdds(s){
+ if(s.avgOdds===null) return `<span class="st-odds">—</span>`;
+ const cls = s.avgOdds>0?'dog':'chalk';
+ const str = s.avgOdds>0?`+${s.avgOdds}`:String(s.avgOdds);
+ const upsetTag = s.upsetWins>0
+        ? `<span class="upset-tag" title="${s.upsetWins} underdog win${s.upsetWins!==1?'s':''}">🔥${s.upsetWins}</span>`
+        : '';
+ return `<span class="st-odds ${cls}">${str}</span>${upsetTag}`;
     }
  sw.innerHTML = `
       <div class="section-title" style="margin-bottom:.6rem">STANDINGS</div>
@@ -2521,8 +2545,8 @@ function renderLeaderboard(){
               <td><span class="st-rec" style="color:var(--red);font-weight:700">${s.losses}</span></td>
               <td><span class="st-pct">${pct}%</span></td>
               <td><span class="st-net ${netCls}">${netSign}${fmt(s.net)}</span></td>
-              <td>${fmtOdds(s.avgOdds)}</td>
-              <td class="st-hide-mob">${styleBadge(s.avgOdds)}</td>
+              <td>${fmtOdds(s)}</td>
+              <td class="st-hide-mob">${styleBadge(s.avgProb)}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -2872,8 +2896,8 @@ function applyScoreToEl(el, betId, li, leg, s){
 // GAME CAST — click-in live view (drive, win prob, recent plays)
 // ════════════════════════════════════════════════════════
 // Kept out of the card itself so the ladder stays scannable: the card gets one
-// compact down-&-distance line (see situationHtml above) and a button; everything
-// heavier (drive detail, win-prob bar, play log) only renders once the user opts in.
+// compact ticker line (see gcTriggerHtml above) and the full feed — drive detail,
+// win-prob bar, play log — only renders once the user taps in.
 function openGameCast(betId, li){
   const bet = (window._state?.bets||[]).find(b=>b.id===betId);
   const leg = bet?.legs?.[li];

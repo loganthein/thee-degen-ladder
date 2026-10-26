@@ -448,6 +448,14 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .lb-rate{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
 .lb-rate b{color:var(--text);}
 .lb-empty{color:var(--muted);font-size:.85rem;padding:.5rem 0;}
+.gs-formula{margin-bottom:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface2);}
+.gs-formula summary{cursor:pointer;padding:.6rem .85rem;font-size:.76rem;color:var(--muted);font-weight:600;list-style:none;}
+.gs-formula summary::-webkit-details-marker{display:none;}
+.gs-formula summary::after{content:'▾';float:right;transition:transform .15s;}
+.gs-formula[open] summary::after{transform:rotate(180deg);}
+.gs-formula-body{padding:0 .85rem .8rem;}
+.gs-formula-row{font-size:.74rem;color:var(--text);line-height:1.5;margin-top:6px;}
+.gs-formula-row b{color:var(--gold);}
 
 /* ── STANDINGS TABLE ── */
 .standings-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem;}
@@ -2490,12 +2498,16 @@ function computeGamblerScores(){
     // record can't outscore a proven 30-for-50 on sample size alone.
  const winRate = won.length/decided;
  const winRateAdj = wilsonLowerBound(won.length, decided);
- const probArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
+    // A parlay's odds are the COMBINED payout across every leg, not a single pick's
+    // actual risk — three -150 favorites parlayed together can show as +180 overall
+    // despite containing zero underdog picks. Only straight/freeform bets' odds
+    // represent one real risk decision, so only those feed Risk and Clutch.
+ const probArr = fb.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
  const avgProb = probArr.length ? probArr.reduce((s,p)=>s+p,0)/probArr.length : 0.5;
  const risk = Math.min(1, Math.max(0, 1-avgProb));
  const pressureVals = won.filter(b=>b._rungTotal>0).map(b=>b._rung/b._rungTotal);
  const pressure = pressureVals.length ? pressureVals.reduce((s,v)=>s+v,0)/pressureVals.length : 0;
- const upsetWins = won.filter(b=>{ const o=parseInt(b.odds); return !isNaN(o)&&o>0; }).length;
+ const upsetWins = won.filter(b=>{ if(b.betType==='parlay') return false; const o=parseInt(b.odds); return !isNaN(o)&&o>0; }).length;
  const clutch = won.length ? upsetWins/won.length : 0;
  const score = Math.round(100*(0.40*winRateAdj + 0.25*risk + 0.25*pressure + 0.10*clutch));
  return { name:f.name, score, winRate, risk, pressure, clutch, wins:won.length, losses:lost.length, decided };
@@ -2520,7 +2532,11 @@ function renderLeaderboard(){
  const totalWon  = won.reduce((s,b)=>s+(parseFloat(b.payout)||0),0);
  const totalLost = lost.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
  const net = totalWon - totalLost;
- const probArr = fb.map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
+    // A parlay's odds are the COMBINED payout across every leg, not a single pick's
+    // actual risk — three -150 favorites parlayed together can show as +180 overall
+    // despite containing zero underdog picks. Only straight/freeform bets' odds
+    // represent one real risk decision, so only those count toward this average.
+ const probArr = fb.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
  const avgProb = probArr.length ? probArr.reduce((s,p)=>s+p,0)/probArr.length : null;
  const avgOdds = avgProb!==null ? impliedProbToOdds(avgProb) : null;
  return { name:f.name, wins:won.length, losses:lost.length, totalWon, totalLost, net, total:fb.length, avgProb, avgOdds };
@@ -2612,6 +2628,16 @@ function renderLeaderboard(){
       <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-bottom:.8rem;">
         Win rate · risk-taking · how late you're winning in the ladder · clutch underdog hits — rolled into one number.
       </div>
+      <details class="gs-formula">
+        <summary>How it's calculated</summary>
+        <div class="gs-formula-body">
+          <div class="gs-formula-row"><b>40% Win rate</b> — your win % (shown as-is), but the score itself uses a sample-size-adjusted version so a couple of lucky bets can't outrank someone with a long, proven track record.</div>
+          <div class="gs-formula-row"><b>25% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlay odds don't count here — a parlay's combined payout isn't one real risk decision, only straight/single bets are.</div>
+          <div class="gs-formula-row"><b>25% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts far more than winning rung 1.</div>
+          <div class="gs-formula-row"><b>10% Clutch</b> — the share of your wins that were underdog bets that actually hit (parlays excluded, same reason as Risk).</div>
+          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.40×Win + 0.25×Risk + 0.25×Pressure + 0.10×Clutch))</div>
+        </div>
+      </details>
       <div class="lb-grid" style="margin-bottom:2rem;">
  ${gScores.map((g,i)=>{
  const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';

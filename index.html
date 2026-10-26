@@ -2455,19 +2455,30 @@ function impliedProbToOdds(prob){
 }
 
 // ── Gambler Score ───────────────────────────────────────
-// A single composite "who's the best gambler" ranking, built from four ingredients:
-//   • Win rate — the Wilson lower bound (95% CI) instead of the raw percentage, so a
-//     2-for-2 record doesn't outrank a proven 30-for-50 just because the raw % is
+// A single composite "who's the best gambler" ranking, built from five ingredients:
+//   • Win rate (35%) — the Wilson lower bound (95% CI) instead of the raw percentage,
+//     so a 2-for-2 record doesn't outrank a proven 30-for-50 just because the raw % is
 //     higher; it's pulled toward 0 until there's enough sample size to trust it.
-//   • Risk — how much of an underdog someone's bets are ON AVERAGE (via the same
+//   • Risk (15%) — how much of an underdog someone's bets are ON AVERAGE (via the same
 //     implied-probability averaging the Standings "Avg Odds" fix uses), rewarding real
 //     risk-taking in bet SELECTION regardless of how any single bet turned out.
-//   • Pressure — how deep into the ladder someone's WINS land, on average (rung N of
-//     that ladder attempt's total rung count). Winning rung 1 of 6 barely moves this;
-//     winning the last rung — with the whole group's stake riding on it — maxes it out.
-//   • Clutch — the share of wins that were on underdog (positive) odds: picked a
-//     longshot and it actually hit, which neither win rate nor average risk can show
-//     on their own (someone can bet bold and still only cash in on the easy ones).
+//   • Difficulty (20%) — how hard the bets someone actually WON were to win, scaled
+//     continuously by implied probability (1 - implied%). A +300 win counts for a lot
+//     more than a +105 win instead of both just flipping the same binary "clutch"
+//     switch — hitting a true longshot is objectively harder than hitting a near-pick'em.
+//   • Pressure (15%) — how deep into the ladder someone's WINS land, on average (rung N
+//     of that ladder attempt's total rung count). The group's stake and elimination
+//     risk are highest near the end, so a late win carries more weight here.
+//   • Impact (15%) — how much a win grew the ladder's compounding stake (payout ÷
+//     wager, capped), weighted by how many rungs were still left after it to carry that
+//     growth forward. A big underdog hit on rung 1 funds every remaining rung's stake —
+//     that's worth far more to the team's overall success than the same payout on the
+//     final rung, which has nothing left to compound into. Pressure and Impact are
+//     deliberately opposite in WHEN they reward a win (late vs. early) because they're
+//     rewarding two different things: surviving the moment vs. building the pot.
+// Risk, Difficulty, and Impact all exclude parlay bets' odds/payout ratios — a parlay's
+// number is the COMBINED result across every leg, not one pick's real difficulty or a
+// clean payout multiple to compare against a straight bet's.
 function wilsonLowerBound(wins, n, z=1.96){
   if(n===0) return 0;
   const phat = wins/n;
@@ -2481,7 +2492,7 @@ function computeGamblerScores(){
   const archive = window._state?.archive||[];
   const friends = window._state?.friends||[];
   // Tag every bet with its rung position and that ladder attempt's total rung count
-  // BEFORE flattening across ladders — the Pressure component needs both.
+  // BEFORE flattening across ladders — Pressure and Impact both need it.
   const curGoal = GOAL_RUNGS();
   const tagged = [
     ...curBets.map((b,i)=>({...b, _rung:i+1, _rungTotal:curGoal})),
@@ -2498,19 +2509,27 @@ function computeGamblerScores(){
     // record can't outscore a proven 30-for-50 on sample size alone.
  const winRate = won.length/decided;
  const winRateAdj = wilsonLowerBound(won.length, decided);
-    // A parlay's odds are the COMBINED payout across every leg, not a single pick's
-    // actual risk — three -150 favorites parlayed together can show as +180 overall
-    // despite containing zero underdog picks. Only straight/freeform bets' odds
-    // represent one real risk decision, so only those feed Risk and Clutch.
+
  const probArr = fb.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(oddsToImpliedProb);
  const avgProb = probArr.length ? probArr.reduce((s,p)=>s+p,0)/probArr.length : 0.5;
  const risk = Math.min(1, Math.max(0, 1-avgProb));
+
+ const difficultyVals = won.filter(b=>b.betType!=='parlay').map(b=>parseInt(b.odds)).filter(o=>!isNaN(o)&&o!==0).map(o=>1-oddsToImpliedProb(o));
+ const difficulty = difficultyVals.length ? difficultyVals.reduce((s,v)=>s+v,0)/difficultyVals.length : 0;
+
  const pressureVals = won.filter(b=>b._rungTotal>0).map(b=>b._rung/b._rungTotal);
  const pressure = pressureVals.length ? pressureVals.reduce((s,v)=>s+v,0)/pressureVals.length : 0;
- const upsetWins = won.filter(b=>{ if(b.betType==='parlay') return false; const o=parseInt(b.odds); return !isNaN(o)&&o>0; }).length;
- const clutch = won.length ? upsetWins/won.length : 0;
- const score = Math.round(100*(0.40*winRateAdj + 0.25*risk + 0.25*pressure + 0.10*clutch));
- return { name:f.name, score, winRate, risk, pressure, clutch, wins:won.length, losses:lost.length, decided };
+
+ const impactVals = won.filter(b=>b.betType!=='parlay' && b._rungTotal>1).map(b=>{
+ const amt = parseFloat(b.amount)||0, payout = parseFloat(b.payout)||0;
+ const ratio = amt>0 ? Math.min(1, (payout/amt)/5) : 0; // cap at a 5x profit multiple
+ const earliness = (b._rungTotal-b._rung)/(b._rungTotal-1); // 1 = rung 1, 0 = last rung
+ return ratio*earliness;
+    });
+ const impact = impactVals.length ? impactVals.reduce((s,v)=>s+v,0)/impactVals.length : 0;
+
+ const score = Math.round(100*(0.35*winRateAdj + 0.15*risk + 0.20*difficulty + 0.15*pressure + 0.15*impact));
+ return { name:f.name, score, winRate, risk, difficulty, pressure, impact, wins:won.length, losses:lost.length, decided };
   }).filter(Boolean).sort((a,b)=>b.score-a.score);
 }
 
@@ -2626,16 +2645,17 @@ function renderLeaderboard(){
  gw.innerHTML = !gScores.length ? '' : `
       <div class="section-title" style="margin-bottom:.4rem">GAMBLER SCORE</div>
       <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);margin-bottom:.8rem;">
-        Win rate · risk-taking · how late you're winning in the ladder · clutch underdog hits — rolled into one number.
+        Win rate · risk-taking · how hard your wins were · how late (or how early and big) they landed — rolled into one number.
       </div>
       <details class="gs-formula">
         <summary>How it's calculated</summary>
         <div class="gs-formula-body">
-          <div class="gs-formula-row"><b>40% Win rate</b> — your win % (shown as-is), but the score itself uses a sample-size-adjusted version so a couple of lucky bets can't outrank someone with a long, proven track record.</div>
-          <div class="gs-formula-row"><b>25% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlay odds don't count here — a parlay's combined payout isn't one real risk decision, only straight/single bets are.</div>
-          <div class="gs-formula-row"><b>25% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts far more than winning rung 1.</div>
-          <div class="gs-formula-row"><b>10% Clutch</b> — the share of your wins that were underdog bets that actually hit (parlays excluded, same reason as Risk).</div>
-          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.40×Win + 0.25×Risk + 0.25×Pressure + 0.10×Clutch))</div>
+          <div class="gs-formula-row"><b>35% Win rate</b> — your win % (shown as-is), but the score itself uses a sample-size-adjusted version so a couple of lucky bets can't outrank someone with a long, proven track record.</div>
+          <div class="gs-formula-row"><b>15% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlay odds don't count here — a parlay's combined payout isn't one real risk decision, only straight/single bets are.</div>
+          <div class="gs-formula-row"><b>20% Difficulty</b> — how hard the bets you actually WON were to win, scaled continuously by the odds (a +300 win counts for a lot more than a +105 win, not just "underdog = underdog").</div>
+          <div class="gs-formula-row"><b>15% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts for a lot.</div>
+          <div class="gs-formula-row"><b>15% Impact</b> — how much a win grew the ladder's compounding stake (payout ÷ wager), weighted by how many rungs were left after it to carry that growth forward. A big underdog hit on rung 1 funds every remaining rung — worth more to the team than the same payout on the last rung, which has nothing left to compound into.</div>
+          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.35×Win + 0.15×Risk + 0.20×Difficulty + 0.15×Pressure + 0.15×Impact))</div>
         </div>
       </details>
       <div class="lb-grid" style="margin-bottom:2rem;">
@@ -2648,7 +2668,7 @@ function renderLeaderboard(){
           <div class="lb-row">
             <div class="lb-stat"><div class="lb-stat-lbl">Score</div><div class="lb-stat-val" style="font-size:2.1rem;">${g.score}</div></div>
           </div>
-          <div class="lb-rate">Win <b>${Math.round(g.winRate*100)}%</b> · Risk <b>${Math.round(g.risk*100)}%</b> · Pressure <b>${Math.round(g.pressure*100)}%</b> · Clutch <b>${Math.round(g.clutch*100)}%</b></div>
+          <div class="lb-rate">Win <b>${Math.round(g.winRate*100)}%</b> · Risk <b>${Math.round(g.risk*100)}%</b> · Difficulty <b>${Math.round(g.difficulty*100)}%</b> · Pressure <b>${Math.round(g.pressure*100)}%</b> · Impact <b>${Math.round(g.impact*100)}%</b></div>
         </div>`;
         }).join('')}
       </div>`;

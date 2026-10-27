@@ -456,6 +456,10 @@ header{border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-i
 .gs-formula-body{padding:0 .85rem .8rem;}
 .gs-formula-row{font-size:.74rem;color:var(--text);line-height:1.5;margin-top:6px;}
 .gs-formula-row b{color:var(--gold);}
+.gs-tier{display:inline-block;margin-top:6px;padding:2px 9px;border-radius:10px;font-family:'DM Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+.gs-tier.pos{background:var(--surface-green);color:var(--green);border:1px solid var(--border-green);}
+.gs-tier.neu{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.gs-tier.neg{background:var(--surface-red);color:var(--red);border:1px solid var(--border-red);}
 
 /* ── STANDINGS TABLE ── */
 .standings-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem;}
@@ -2492,6 +2496,21 @@ function wilsonLowerBound(wins, n, z=1.96){
   const margin = z*Math.sqrt((phat*(1-phat)+z*z/(4*n))/n);
   return Math.max(0, (center-margin)/denom);
 }
+// The internal 0-100 composite above rarely gets near either of its own extremes —
+// every component maxing out at once (perfect win rate, max risk, max difficulty, max
+// pressure, max impact) is essentially impossible in real betting — so a bare "36" has
+// nothing to calibrate against. Map it onto a 300-850 scale instead, the same range (and
+// same intuition — "700+ is good") people already carry around from credit scores, with
+// a fixed-threshold tier label that doesn't shift just because someone else's stats
+// moved (unlike a group-relative percentile would).
+function scoreTier(raw){
+  const display = 300 + Math.round(raw*5.5);
+  if(raw>=80) return { display, label:'Elite',      cls:'pos' };
+  if(raw>=60) return { display, label:'Sharp',      cls:'pos' };
+  if(raw>=40) return { display, label:'Solid',      cls:'neu' };
+  if(raw>=20) return { display, label:'Developing', cls:'neu' };
+  return            { display, label:'Degenerate',  cls:'neg' };
+}
 function computeGamblerScores(){
   const curBets = window._state?.bets||[];
   const archive = window._state?.archive||[];
@@ -2534,7 +2553,8 @@ function computeGamblerScores(){
  const impact = impactVals.length ? impactVals.reduce((s,v)=>s+v,0)/impactVals.length : 0;
 
  const score = Math.round(100*(0.30*winRateAdj + 0.10*risk + 0.15*difficulty + 0.15*pressure + 0.30*impact));
- return { name:f.name, score, winRate, risk, difficulty, pressure, impact, wins:won.length, losses:lost.length, decided };
+ const tier = scoreTier(score);
+ return { name:f.name, score, display:tier.display, tierLabel:tier.label, tierCls:tier.cls, winRate, risk, difficulty, pressure, impact, wins:won.length, losses:lost.length, decided };
   }).filter(Boolean).sort((a,b)=>b.score-a.score);
 }
 
@@ -2658,19 +2678,19 @@ function renderLeaderboard(){
           <div class="gs-formula-row"><b>15% Difficulty</b> — how hard the bets you actually WON were to win, scaled continuously by the odds (a +300 win counts for a lot more than a +105 win, not just "underdog = underdog").</div>
           <div class="gs-formula-row"><b>15% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts for a lot.</div>
           <div class="gs-formula-row"><b>30% Impact</b> — how much a win grew the ladder's compounding stake (payout ÷ wager), weighted by how many rungs were left after it to carry that growth forward. A big underdog hit on rung 1 funds every remaining rung — worth more to the team than the same payout on the last rung, which has nothing left to compound into. Weighted the heaviest of the five — building the pot is what carries the whole team forward.</div>
-          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.30×Win + 0.10×Risk + 0.15×Difficulty + 0.15×Pressure + 0.30×Impact))</div>
+          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.30×Win + 0.10×Risk + 0.15×Difficulty + 0.15×Pressure + 0.30×Impact)), then mapped onto a 300-850 scale (like a credit score) and labeled with a tier — <b>Degenerate / Developing / Solid / Sharp / Elite</b> — with fixed cutoffs that don't move just because someone else's stats did, since every component maxing out at once is essentially impossible and a plain 0-100 number had nothing to calibrate against.</div>
         </div>
       </details>
       <div class="lb-grid" style="margin-bottom:2rem;">
  ${gScores.map((g,i)=>{
  const rankCls = i===0?'r1':i===1?'r2':i===2?'r3':'';
- const cardCls = g.score>=70?'pos':g.score>=40?'neu':'neg';
- return `<div class="lb-card ${cardCls}">
+ return `<div class="lb-card ${g.tierCls}">
           <div class="lb-rank ${rankCls}">#${i+1}</div>
           <div class="lb-name">${esc(g.name)}</div>
           <div class="lb-row">
-            <div class="lb-stat"><div class="lb-stat-lbl">Score</div><div class="lb-stat-val" style="font-size:2.1rem;">${g.score}</div></div>
+            <div class="lb-stat"><div class="lb-stat-lbl">Score</div><div class="lb-stat-val" style="font-size:2.1rem;">${g.display}</div></div>
           </div>
+          <div class="gs-tier ${g.tierCls}">${g.tierLabel}</div>
           <div class="lb-rate">Win <b>${Math.round(g.winRate*100)}%</b> · Risk <b>${Math.round(g.risk*100)}%</b> · Difficulty <b>${Math.round(g.difficulty*100)}%</b> · Pressure <b>${Math.round(g.pressure*100)}%</b> · Impact <b>${Math.round(g.impact*100)}%</b></div>
         </div>`;
         }).join('')}

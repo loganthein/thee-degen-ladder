@@ -2498,18 +2498,21 @@ function wilsonLowerBound(wins, n, z=1.96){
 }
 // The internal 0-100 composite above rarely gets near either of its own extremes —
 // every component maxing out at once (perfect win rate, max risk, max difficulty, max
-// pressure, max impact) is essentially impossible in real betting — so a bare "36" has
-// nothing to calibrate against. Map it onto a 300-850 scale instead, the same range (and
-// same intuition — "700+ is good") people already carry around from credit scores, with
-// a fixed-threshold tier label that doesn't shift just because someone else's stats
-// moved (unlike a group-relative percentile would).
-function scoreTier(raw){
-  const display = 300 + Math.round(raw*5.5);
-  if(raw>=80) return { display, label:'Elite',      cls:'pos' };
-  if(raw>=60) return { display, label:'Sharp',      cls:'pos' };
-  if(raw>=40) return { display, label:'Solid',      cls:'neu' };
-  if(raw>=20) return { display, label:'Developing', cls:'neu' };
-  return            { display, label:'Degenerate',  cls:'neg' };
+// pressure, max impact) is essentially impossible in real betting — so mapping the raw
+// number onto a fixed scale just moved the same bunched-up cluster to different-looking
+// digits; everyone still landed in the same tier. Instead, stretch the GROUP's actual
+// spread to fill the whole 300-850 range: today's best performance reads near 850/Elite,
+// today's worst near 300/Degenerate, and everyone else lands in between based on how
+// they compare to each other right now. That means the number is relative, not a fixed
+// bar — it re-spreads itself next time anyone's stats change — but with a small group
+// that's the only way the scores actually separate instead of clumping in one tier.
+function scoreTier(norm){
+  const display = 300 + Math.round(norm*550);
+  if(norm>=0.8) return { display, label:'Elite',      cls:'pos' };
+  if(norm>=0.6) return { display, label:'Sharp',      cls:'pos' };
+  if(norm>=0.4) return { display, label:'Solid',      cls:'neu' };
+  if(norm>=0.2) return { display, label:'Developing', cls:'neu' };
+  return             { display, label:'Degenerate',  cls:'neg' };
 }
 function computeGamblerScores(){
   const curBets = window._state?.bets||[];
@@ -2553,9 +2556,16 @@ function computeGamblerScores(){
  const impact = impactVals.length ? impactVals.reduce((s,v)=>s+v,0)/impactVals.length : 0;
 
  const score = Math.round(100*(0.30*winRateAdj + 0.10*risk + 0.15*difficulty + 0.15*pressure + 0.30*impact));
- const tier = scoreTier(score);
- return { name:f.name, score, display:tier.display, tierLabel:tier.label, tierCls:tier.cls, winRate, risk, difficulty, pressure, impact, wins:won.length, losses:lost.length, decided };
-  }).filter(Boolean).sort((a,b)=>b.score-a.score);
+ return { name:f.name, score, winRate, risk, difficulty, pressure, impact, wins:won.length, losses:lost.length, decided };
+  }).filter(Boolean).sort((a,b)=>b.score-a.score)
+    .map((s,i,arr)=>{
+      // Stretch THIS group's score spread across the full display range (see note above).
+ const scores = arr.map(x=>x.score);
+ const lo = Math.min(...scores), hi = Math.max(...scores);
+ const norm = hi>lo ? (s.score-lo)/(hi-lo) : 0.5;
+ const tier = scoreTier(norm);
+ return { ...s, display:tier.display, tierLabel:tier.label, tierCls:tier.cls };
+    });
 }
 
 // ── Leaderboard ───────────────────────────────────────
@@ -2678,7 +2688,7 @@ function renderLeaderboard(){
           <div class="gs-formula-row"><b>15% Difficulty</b> — how hard the bets you actually WON were to win, scaled continuously by the odds (a +300 win counts for a lot more than a +105 win, not just "underdog = underdog").</div>
           <div class="gs-formula-row"><b>15% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts for a lot.</div>
           <div class="gs-formula-row"><b>30% Impact</b> — how much a win grew the ladder's compounding stake (payout ÷ wager), weighted by how many rungs were left after it to carry that growth forward. A big underdog hit on rung 1 funds every remaining rung — worth more to the team than the same payout on the last rung, which has nothing left to compound into. Weighted the heaviest of the five — building the pot is what carries the whole team forward.</div>
-          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.30×Win + 0.10×Risk + 0.15×Difficulty + 0.15×Pressure + 0.30×Impact)), then mapped onto a 300-850 scale (like a credit score) and labeled with a tier — <b>Degenerate / Developing / Solid / Sharp / Elite</b> — with fixed cutoffs that don't move just because someone else's stats did, since every component maxing out at once is essentially impossible and a plain 0-100 number had nothing to calibrate against.</div>
+          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.30×Win + 0.10×Risk + 0.15×Difficulty + 0.15×Pressure + 0.30×Impact)). That number rarely gets near its own extremes, so it's then stretched to fill a 300-850 scale (like a credit score) relative to the group right now — today's best reads near 850/Elite, today's worst near 300/Degenerate — and labeled with a tier: <b>Degenerate / Developing / Solid / Sharp / Elite</b>. Because it's relative, your number can shift even if your own stats didn't, if someone else's did.</div>
         </div>
       </details>
       <div class="lb-grid" style="margin-bottom:2rem;">

@@ -2456,26 +2456,28 @@ function impliedProbToOdds(prob){
 
 // ── Gambler Score ───────────────────────────────────────
 // A single composite "who's the best gambler" ranking, built from five ingredients:
-//   • Win rate (35%) — the Wilson lower bound (95% CI) instead of the raw percentage,
+//   • Win rate (30%) — the Wilson lower bound (95% CI) instead of the raw percentage,
 //     so a 2-for-2 record doesn't outrank a proven 30-for-50 just because the raw % is
 //     higher; it's pulled toward 0 until there's enough sample size to trust it.
-//   • Risk (15%) — how much of an underdog someone's bets are ON AVERAGE (via the same
+//   • Risk (10%) — how much of an underdog someone's bets are ON AVERAGE (via the same
 //     implied-probability averaging the Standings "Avg Odds" fix uses), rewarding real
 //     risk-taking in bet SELECTION regardless of how any single bet turned out.
-//   • Difficulty (20%) — how hard the bets someone actually WON were to win, scaled
+//   • Difficulty (15%) — how hard the bets someone actually WON were to win, scaled
 //     continuously by implied probability (1 - implied%). A +300 win counts for a lot
 //     more than a +105 win instead of both just flipping the same binary "clutch"
 //     switch — hitting a true longshot is objectively harder than hitting a near-pick'em.
 //   • Pressure (15%) — how deep into the ladder someone's WINS land, on average (rung N
 //     of that ladder attempt's total rung count). The group's stake and elimination
 //     risk are highest near the end, so a late win carries more weight here.
-//   • Impact (15%) — how much a win grew the ladder's compounding stake (payout ÷
+//   • Impact (30%) — how much a win grew the ladder's compounding stake (payout ÷
 //     wager, capped), weighted by how many rungs were still left after it to carry that
 //     growth forward. A big underdog hit on rung 1 funds every remaining rung's stake —
 //     that's worth far more to the team's overall success than the same payout on the
 //     final rung, which has nothing left to compound into. Pressure and Impact are
 //     deliberately opposite in WHEN they reward a win (late vs. early) because they're
-//     rewarding two different things: surviving the moment vs. building the pot.
+//     rewarding two different things: surviving the moment vs. building the pot — Impact
+//     is weighted the heaviest of the two since building the pot is what actually
+//     carries the whole team forward.
 // Risk, Difficulty, and Impact all include parlays using their combined odds/payout —
 // a parlay's combined odds ARE the real, correctly-compounded probability of every leg
 // hitting together (e.g. three -150 favorites parlayed is genuinely a ~+180 underdog
@@ -2531,7 +2533,7 @@ function computeGamblerScores(){
     });
  const impact = impactVals.length ? impactVals.reduce((s,v)=>s+v,0)/impactVals.length : 0;
 
- const score = Math.round(100*(0.35*winRateAdj + 0.15*risk + 0.20*difficulty + 0.15*pressure + 0.15*impact));
+ const score = Math.round(100*(0.30*winRateAdj + 0.10*risk + 0.15*difficulty + 0.15*pressure + 0.30*impact));
  return { name:f.name, score, winRate, risk, difficulty, pressure, impact, wins:won.length, losses:lost.length, decided };
   }).filter(Boolean).sort((a,b)=>b.score-a.score);
 }
@@ -2651,12 +2653,12 @@ function renderLeaderboard(){
       <details class="gs-formula">
         <summary>How it's calculated</summary>
         <div class="gs-formula-body">
-          <div class="gs-formula-row"><b>35% Win rate</b> — your win % (shown as-is), but the score itself uses a sample-size-adjusted version so a couple of lucky bets can't outrank someone with a long, proven track record.</div>
-          <div class="gs-formula-row"><b>15% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlays count using their combined odds — stacking legs together is a real, harder bet, even if every leg on its own was a favorite.</div>
-          <div class="gs-formula-row"><b>20% Difficulty</b> — how hard the bets you actually WON were to win, scaled continuously by the odds (a +300 win counts for a lot more than a +105 win, not just "underdog = underdog").</div>
+          <div class="gs-formula-row"><b>30% Win rate</b> — your win % (shown as-is), but the score itself uses a sample-size-adjusted version so a couple of lucky bets can't outrank someone with a long, proven track record.</div>
+          <div class="gs-formula-row"><b>10% Risk</b> — how much of an underdog your picks are on average (lower implied win% on the odds = bolder pick). Parlays count using their combined odds — stacking legs together is a real, harder bet, even if every leg on its own was a favorite.</div>
+          <div class="gs-formula-row"><b>15% Difficulty</b> — how hard the bets you actually WON were to win, scaled continuously by the odds (a +300 win counts for a lot more than a +105 win, not just "underdog = underdog").</div>
           <div class="gs-formula-row"><b>15% Pressure</b> — how deep into the ladder your WINS land, on average. Winning the last rung, with everyone's money on the line, counts for a lot.</div>
-          <div class="gs-formula-row"><b>15% Impact</b> — how much a win grew the ladder's compounding stake (payout ÷ wager), weighted by how many rungs were left after it to carry that growth forward. A big underdog hit on rung 1 funds every remaining rung — worth more to the team than the same payout on the last rung, which has nothing left to compound into.</div>
-          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.35×Win + 0.15×Risk + 0.20×Difficulty + 0.15×Pressure + 0.15×Impact))</div>
+          <div class="gs-formula-row"><b>30% Impact</b> — how much a win grew the ladder's compounding stake (payout ÷ wager), weighted by how many rungs were left after it to carry that growth forward. A big underdog hit on rung 1 funds every remaining rung — worth more to the team than the same payout on the last rung, which has nothing left to compound into. Weighted the heaviest of the five — building the pot is what carries the whole team forward.</div>
+          <div class="gs-formula-row" style="margin-top:8px;color:var(--muted);">Score = round(100 × (0.30×Win + 0.10×Risk + 0.15×Difficulty + 0.15×Pressure + 0.30×Impact))</div>
         </div>
       </details>
       <div class="lb-grid" style="margin-bottom:2rem;">
